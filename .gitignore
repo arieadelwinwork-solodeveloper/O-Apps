@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Env & secrets (WAJIB — Security PRD 3.5)
+.env
+.env.local
+.env.production
+.env.*.local
+server/.env
+server/.env.local
+server/.env.production
+
+# Build output
+dist/
+server/dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Vite
+.vite/
