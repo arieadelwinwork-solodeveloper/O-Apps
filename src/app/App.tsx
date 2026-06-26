@@ -1,5 +1,6 @@
 import { RouterProvider } from "react-router";
 import { AuthProvider } from "./hooks/useAuth";
+import { DemoModeBanner } from "./components/DemoModeBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { SetupRequired } from "./components/SetupRequired";
 import { isSupabaseConfigured } from "./lib/supabase";
@@ -13,6 +14,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <DemoModeBanner />
         <RouterProvider router={router} />
       </AuthProvider>
     </ErrorBoundary>

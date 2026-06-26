@@ -7,10 +7,9 @@ import {
   Loader2,
   Package,
   CheckCircle2,
-  Upload,
-  X,
+  Printer,
 } from "lucide-react";
-import { listServices } from "../lib/customization";
+import { listServices, listTemplates } from "../lib/customization";
 import { formatServiceUnit } from "../lib/serviceUnits";
 import {
   createOrder,
@@ -18,12 +17,23 @@ import {
   type CreateOrderInput,
 } from "../lib/orders";
 import { listMemberships } from "../lib/membership";
+import { getBusiness } from "../lib/printDevices";
+import { ensurePrinter, printReceipt } from "../lib/printer";
+import {
+  openWhatsApp,
+  pickTemplate,
+  renderTemplate,
+  waNumber,
+} from "../lib/messages";
 import { inputClass } from "../components/formui";
+import { PaymentProofField } from "../components/order/PaymentProofField";
+import { WhatsAppIcon } from "../components/icons/WhatsAppIcon";
 import type {
   Service,
   PaymentStatus,
   PaymentMethod,
   Membership,
+  Order,
 } from "../types";
 
 function rupiah(n: number): string {
@@ -42,16 +52,39 @@ const PAYMENT_METHOD: { id: PaymentMethod; label: string }[] = [
   { id: "transfer", label: "Transfer" },
 ];
 
+function isPhoneValid(phone: string): boolean {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length >= 8;
+}
+
+/** Bukti bayar hanya untuk QRIS/Transfer saat ada pembayaran di muka. */
+function requiresPaymentProof(
+  method: PaymentMethod,
+  status: PaymentStatus,
+  netTotal: number,
+  dpAmount: string
+): boolean {
+  if (method === "tunai") return false;
+  if (status === "bayar_belakang") return false;
+  if (status === "lunas_depan") return netTotal > 0;
+  if (status === "dp") return (Number(dpAmount) || 0) > 0;
+  return false;
+}
+
 export function OrderView() {
   const navigate = useNavigate();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [successNo, setSuccessNo] = useState<string | null>(null);
+  const [successOrder, setSuccessOrder] = useState<Order | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [sendingWa, setSendingWa] = useState(false);
+  const [successError, setSuccessError] = useState<string | null>(null);
 
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [orderNote, setOrderNote] = useState("");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("lunas_depan");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("tunai");
@@ -137,6 +170,12 @@ export function OrderView() {
   const membershipDiscount = quotaDiscount + saldoMembershipAmount;
   const netTotal = Math.max(0, total - membershipDiscount);
 
+  useEffect(() => {
+    if (!requiresPaymentProof(paymentMethod, paymentStatus, netTotal, dpAmount)) {
+      setProofFile(null);
+    }
+  }, [paymentMethod, paymentStatus, netTotal, dpAmount]);
+
   const applicableQuotas = quotaMemberships.filter(
     (m) => m.quota_service_id && (cart[m.quota_service_id] ?? 0) > 0
   );
@@ -150,15 +189,29 @@ export function OrderView() {
     });
   }
 
-  const needsProof =
-    paymentMethod !== "tunai" &&
-    paymentStatus !== "bayar_belakang" &&
-    netTotal > 0;
+
+  const needsProof = requiresPaymentProof(
+    paymentMethod,
+    paymentStatus,
+    netTotal,
+    dpAmount
+  );
+
+  const submitBlocked =
+    submitting ||
+    !customerName.trim() ||
+    itemCount === 0 ||
+    !isPhoneValid(customerPhone) ||
+    (needsProof && !proofFile);
 
   async function submit() {
     setError(null);
     if (!customerName.trim()) {
       setError("Nama pelanggan wajib diisi");
+      return;
+    }
+    if (!isPhoneValid(customerPhone)) {
+      setError("Nomor WhatsApp wajib diisi (min. 8 digit)");
       return;
     }
     if (itemCount === 0) {
@@ -173,7 +226,11 @@ export function OrderView() {
       }
     }
     if (needsProof && !proofFile) {
-      setError("Unggah bukti bayar untuk pembayaran non-tunai");
+      setError(
+        paymentStatus === "lunas_depan"
+          ? "Status Lunas (QRIS/Transfer) wajib melampirkan bukti bayar"
+          : "Unggah bukti transfer untuk pembayaran QRIS / Transfer"
+      );
       return;
     }
 
@@ -197,14 +254,15 @@ export function OrderView() {
 
       const payload: CreateOrderInput = {
         customerName: customerName.trim(),
-        customerPhone: customerPhone.trim() || undefined,
+        customerPhone: customerPhone.trim(),
         items: Object.entries(cart).map(([serviceId, qty]) => ({
           serviceId,
           qty,
         })),
         paymentStatus,
         paymentMethod,
-        proofUrl,
+        ...(needsProof && proofUrl ? { proofUrl } : {}),
+        ...(orderNote.trim() ? { note: orderNote.trim() } : {}),
         ...(paymentStatus === "dp"
           ? { paidAmount: Number(dpAmount) || 0 }
           : {}),
@@ -214,7 +272,7 @@ export function OrderView() {
         ...(quotaUsages.length > 0 ? { membershipQuotaUsages: quotaUsages } : {}),
       };
       const order = await createOrder(payload);
-      setSuccessNo(order.order_no);
+      setSuccessOrder(order);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal membuat transaksi");
     } finally {
@@ -225,6 +283,7 @@ export function OrderView() {
   function reset() {
     setCustomerName("");
     setCustomerPhone("");
+    setOrderNote("");
     setCart({});
     setPaymentStatus("lunas_depan");
     setPaymentMethod("tunai");
@@ -233,7 +292,50 @@ export function OrderView() {
     setMemberships([]);
     setSaldoToUse("");
     setQuotaToUse({});
-    setSuccessNo(null);
+    setSuccessOrder(null);
+    setSuccessError(null);
+  }
+
+  async function printNota() {
+    if (!successOrder) return;
+    setSuccessError(null);
+    setPrinting(true);
+    try {
+      const business = await getBusiness().catch(() => null);
+      const printer = await ensurePrinter();
+      await printReceipt(printer, successOrder, business);
+    } catch (e) {
+      setSuccessError(e instanceof Error ? e.message : "Gagal mencetak nota");
+    } finally {
+      setPrinting(false);
+    }
+  }
+
+  async function sendNotaWhatsApp() {
+    if (!successOrder) return;
+    const phone = waNumber(
+      successOrder.customers?.phone ?? customerPhone.trim()
+    );
+    if (!phone) {
+      setSuccessError("Nomor WhatsApp pelanggan tidak valid");
+      return;
+    }
+    setSuccessError(null);
+    setSendingWa(true);
+    try {
+      const templates = await listTemplates().catch(() => []);
+      const tpl = pickTemplate(templates, "nota");
+      const body = tpl
+        ? renderTemplate(tpl.body, successOrder)
+        : `Halo ${successOrder.customers?.name ?? ""}, terima kasih atas pesanan Anda.\n\nNota: ${successOrder.order_no}\nTotal: ${rupiah(successOrder.total)}`;
+      openWhatsApp(phone, body);
+    } catch (e) {
+      setSuccessError(
+        e instanceof Error ? e.message : "Gagal membuka WhatsApp"
+      );
+    } finally {
+      setSendingWa(false);
+    }
   }
 
   if (loading) {
@@ -244,7 +346,7 @@ export function OrderView() {
     );
   }
 
-  if (successNo) {
+  if (successOrder) {
     return (
       <div className="p-6 flex flex-col items-center text-center pt-16">
         <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-4">
@@ -252,9 +354,46 @@ export function OrderView() {
         </div>
         <h2 className="text-lg font-semibold text-[#001F5B]">Transaksi Dibuat</h2>
         <p className="text-sm text-slate-500 mt-1">
-          Nomor nota <span className="font-semibold">{successNo}</span>
+          Nomor nota{" "}
+          <span className="font-semibold">{successOrder.order_no}</span>
         </p>
-        <div className="flex gap-3 mt-8 w-full max-w-xs">
+
+        {successError && (
+          <div className="mt-4 w-full max-w-xs text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">
+            {successError}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2.5 mt-6 w-full max-w-xs">
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={printNota}
+            disabled={printing}
+            className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 text-[#001F5B] font-semibold rounded-xl py-3 disabled:opacity-60"
+          >
+            {printing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Printer className="w-4 h-4" />
+            )}
+            Cetak Nota
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={sendNotaWhatsApp}
+            disabled={sendingWa}
+            className="w-full flex items-center justify-center gap-2 bg-[#25D366] text-white font-semibold rounded-xl py-3 disabled:opacity-60 shadow-[0_4px_12px_rgba(37,211,102,0.25)]"
+          >
+            {sendingWa ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <WhatsAppIcon className="w-5 h-5" />
+            )}
+            Kirim Nota ke WhatsApp
+          </motion.button>
+        </div>
+
+        <div className="flex gap-3 mt-6 w-full max-w-xs">
           <button
             onClick={reset}
             className="flex-1 bg-[#001F5B] text-white font-semibold rounded-xl py-3"
@@ -304,8 +443,9 @@ export function OrderView() {
           <input
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value)}
-            placeholder="No. WhatsApp (opsional)"
+            placeholder="No. WhatsApp"
             inputMode="tel"
+            required
             className={inputClass}
           />
         </div>
@@ -426,6 +566,19 @@ export function OrderView() {
         </div>
       )}
 
+      {/* Keterangan */}
+      <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03] mb-4">
+        <h2 className="text-sm font-semibold text-slate-800 mb-3">Keterangan</h2>
+        <textarea
+          value={orderNote}
+          onChange={(e) => setOrderNote(e.target.value)}
+          placeholder="Catatan pesanan (opsional), mis. permintaan khusus pelanggan"
+          rows={3}
+          maxLength={500}
+          className={`${inputClass} resize-none min-h-[88px]`}
+        />
+      </div>
+
       {/* Pembayaran */}
       <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03]">
         <h2 className="text-sm font-semibold text-slate-800 mb-4">Pembayaran</h2>
@@ -473,6 +626,7 @@ export function OrderView() {
               {PAYMENT_METHOD.map((m) => (
                 <button
                   key={m.id}
+                  type="button"
                   onClick={() => setPaymentMethod(m.id)}
                   className={`rounded-xl py-2.5 text-xs font-medium transition-colors ${
                     paymentMethod === m.id
@@ -488,33 +642,8 @@ export function OrderView() {
         )}
 
         {needsProof && (
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1.5 ml-1">
-              Bukti Bayar (wajib non-tunai)
-            </label>
-            {proofFile ? (
-              <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 rounded-xl px-3 py-2.5 text-sm">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span className="flex-1 truncate">{proofFile.name}</span>
-                <button onClick={() => setProofFile(null)} aria-label="Hapus">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <label className="flex items-center justify-center gap-2 bg-[#F5F5F7] text-slate-600 rounded-xl px-3 py-3 text-sm cursor-pointer">
-                <Upload className="w-4 h-4" />
-                Pilih / foto bukti
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) =>
-                    setProofFile(e.target.files?.[0] ?? null)
-                  }
-                />
-              </label>
-            )}
+          <div className="pt-4 mt-4 border-t border-slate-100">
+            <PaymentProofField file={proofFile} onChange={setProofFile} />
           </div>
         )}
       </div>
@@ -544,7 +673,7 @@ export function OrderView() {
         <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={submit}
-          disabled={submitting}
+          disabled={submitBlocked}
           className="w-full bg-[#001F5B] text-white font-medium rounded-2xl py-4 shadow-[0_4px_12px_rgba(0,31,91,0.2)] flex items-center justify-center gap-2 disabled:opacity-60"
         >
           {submitting && <Loader2 className="w-4 h-4 animate-spin" />}

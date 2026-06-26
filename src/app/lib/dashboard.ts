@@ -8,6 +8,7 @@ import type {
   OwnerOmsetSummary,
   PerformaSummary,
   InventoryStatusItem,
+  FinanceForecast,
 } from "../types";
 
 export function formatRupiah(n: number): string {
@@ -43,6 +44,10 @@ export async function getMeToday(): Promise<MeTodaySummary> {
 
 export async function getOwnerOmset(): Promise<OwnerOmsetSummary> {
   return apiFetch<OwnerOmsetSummary>("/api/dashboard/owner-omset");
+}
+
+export async function getFinanceForecast(): Promise<FinanceForecast> {
+  return apiFetch<FinanceForecast>("/api/dashboard/finance-forecast");
 }
 
 export async function getPerforma(): Promise<PerformaSummary> {

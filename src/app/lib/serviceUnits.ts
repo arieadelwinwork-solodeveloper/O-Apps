@@ -2,6 +2,7 @@ export const SERVICE_UNITS = [
   { value: "kg", label: "Kg" },
   { value: "pcs", label: "Pcs" },
   { value: "paket", label: "Paket" },
+  { value: "layanan", label: "Per-Layanan" },
 ] as const;
 
 export type ServiceUnit = (typeof SERVICE_UNITS)[number]["value"];

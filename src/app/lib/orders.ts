@@ -1,4 +1,5 @@
 import { apiFetch } from "./api";
+import { isUsingMockApi, mockUploadUrl } from "./mockMode";
 import { supabase } from "./supabase";
 import type {
   Order,
@@ -10,12 +11,13 @@ import type {
 
 export interface CreateOrderInput {
   customerName: string;
-  customerPhone?: string;
+  customerPhone: string;
   items: { serviceId: string; qty: number }[];
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethod;
   paidAmount?: number;
   proofUrl?: string;
+  note?: string;
   estimatedDoneAt?: string;
   membershipSaldoAmount?: number;
   membershipQuotaUsages?: { membershipId: string; qty: number }[];
@@ -60,12 +62,32 @@ export async function settlePayment(
   });
 }
 
+export function isOrderLunas(order: Pick<Order, "remaining_amount">): boolean {
+  return order.remaining_amount <= 0;
+}
+
+export async function markOrderPickedUp(
+  id: string,
+  returnedByUserId: string
+): Promise<{ order: Order; pickedUpAt: string }> {
+  return apiFetch(`/api/orders/${id}/pickup`, {
+    method: "PATCH",
+    body: JSON.stringify({ returnedByUserId }),
+  });
+}
+
 export async function completeStage(
   orderId: string,
-  stageId: string
+  stageId: string,
+  completedByUserId: string,
+  options?: { skipCommission?: boolean }
 ): Promise<{ commission: number; workStatus: string | null }> {
   return apiFetch(`/api/orders/${orderId}/stages/${stageId}/complete`, {
     method: "PATCH",
+    body: JSON.stringify({
+      completedByUserId,
+      ...(options?.skipCommission ? { skipCommission: true } : {}),
+    }),
   });
 }
 
@@ -79,6 +101,10 @@ export async function listCustomers(q?: string): Promise<Customer[]> {
 
 /** Upload bukti bayar non-tunai ke Supabase Storage, balikkan public URL. */
 export async function uploadPaymentProof(file: File): Promise<string> {
+  if (isUsingMockApi()) {
+    await new Promise((r) => setTimeout(r, 300));
+    return mockUploadUrl("payment");
+  }
   if (!supabase) throw new Error("Supabase belum dikonfigurasi");
   const ext = file.name.split(".").pop() || "jpg";
   const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;

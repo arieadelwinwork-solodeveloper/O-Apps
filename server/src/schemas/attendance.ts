@@ -14,6 +14,7 @@ export const updateBusinessSchema = z.object({
   attendanceLat: z.number().min(-90).max(90).nullable().optional(),
   attendanceLng: z.number().min(-180).max(180).nullable().optional(),
   attendanceRadiusM: z.number().int().min(10).max(5000).optional(),
+  autoSendCompleteNote: z.boolean().optional(),
 });
 
 export type CheckAttendanceInput = z.infer<typeof checkAttendanceSchema>;

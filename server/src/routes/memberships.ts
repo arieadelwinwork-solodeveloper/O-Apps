@@ -4,16 +4,16 @@ import { authMiddleware, requireRole } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
 import { AppError } from "../middleware/errorHandler.js";
 import {
-  createMembershipSchema,
+  registerMembershipSchema,
   topupMembershipSchema,
-  type CreateMembershipInput,
+  type RegisterMembershipInput,
   type TopupMembershipInput,
 } from "../schemas/membership.js";
 
 export const membershipsRouter = Router();
 
 const MEMBERSHIP_COLS =
-  "id, customer_id, type, balance, quota_service_id, quota_remaining, created_at";
+  "id, customer_id, type, balance, quota_service_id, quota_remaining, package_id, created_at";
 
 async function resolveCustomerId(
   businessId: string,
@@ -43,7 +43,7 @@ membershipsRouter.get("/", authMiddleware, async (req: Request, res: Response) =
   let query = supabaseAdmin
     .from("memberships")
     .select(
-      `${MEMBERSHIP_COLS}, customers(name, phone), services:quota_service_id(name, unit)`
+      `${MEMBERSHIP_COLS}, customers(name, phone), services:quota_service_id(name, unit), membership_packages(name, price)`
     )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false })
@@ -86,14 +86,14 @@ membershipsRouter.get(
   }
 );
 
-/** POST /api/memberships — owner buat membership baru. */
+/** POST /api/memberships — daftar membership (pelanggan + paket). */
 membershipsRouter.post(
   "/",
   authMiddleware,
   requireRole("owner"),
-  validateBody(createMembershipSchema),
+  validateBody(registerMembershipSchema),
   async (req: Request, res: Response) => {
-    const body = res.locals.body as CreateMembershipInput;
+    const body = res.locals.body as RegisterMembershipInput;
     const businessId = req.user!.businessId;
 
     const { data: customer, error: custErr } = await supabaseAdmin
@@ -106,64 +106,142 @@ membershipsRouter.post(
       throw new AppError(404, "Pelanggan tidak ditemukan");
     }
 
-    if (body.type === "kuota") {
-      const { data: svc, error: svcErr } = await supabaseAdmin
-        .from("services")
-        .select("id")
-        .eq("id", body.quotaServiceId!)
+    const { data: pkg, error: pkgErr } = await supabaseAdmin
+      .from("membership_packages")
+      .select(
+        "id, type, name, price, saldo_amount, quota_amount, quota_service_id, is_active"
+      )
+      .eq("id", body.packageId)
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (pkgErr || !pkg) throw new AppError(404, "Paket tidak ditemukan");
+    if (!pkg.is_active) throw new AppError(400, "Paket tidak aktif");
+
+    const creditAmount =
+      pkg.type === "saldo" ? pkg.saldo_amount! : pkg.quota_amount!;
+
+    if (pkg.type === "saldo") {
+      const { data: existing } = await supabaseAdmin
+        .from("memberships")
+        .select("id, balance")
         .eq("business_id", businessId)
+        .eq("customer_id", body.customerId)
+        .eq("type", "saldo")
         .maybeSingle();
-      if (svcErr || !svc) throw new AppError(400, "Layanan tidak ditemukan");
+
+      if (existing) {
+        const { data: updated, error: updErr } = await supabaseAdmin
+          .from("memberships")
+          .update({
+            balance: existing.balance + creditAmount,
+            package_id: pkg.id,
+          })
+          .eq("id", existing.id)
+          .select(MEMBERSHIP_COLS)
+          .single();
+        if (updErr) {
+          console.error("[MEMBERSHIP TOPUP VIA PACKAGE ERROR]", updErr);
+          throw new AppError(500, "Gagal menambah saldo membership");
+        }
+        await supabaseAdmin.from("membership_transactions").insert({
+          business_id: businessId,
+          membership_id: existing.id,
+          change_type: "topup",
+          amount: creditAmount,
+        });
+        return res.status(200).json({ membership: updated });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("memberships")
+        .insert({
+          business_id: businessId,
+          customer_id: body.customerId,
+          type: "saldo",
+          balance: creditAmount,
+          quota_remaining: 0,
+          package_id: pkg.id,
+        })
+        .select(MEMBERSHIP_COLS)
+        .single();
+      if (error) {
+        console.error("[MEMBERSHIP CREATE ERROR]", error);
+        throw new AppError(500, "Gagal mendaftarkan membership");
+      }
+      await supabaseAdmin.from("membership_transactions").insert({
+        business_id: businessId,
+        membership_id: data.id,
+        change_type: "topup",
+        amount: creditAmount,
+      });
+      return res.status(201).json({ membership: data });
     }
 
-    const row =
-      body.type === "saldo"
-        ? {
-            business_id: businessId,
-            customer_id: body.customerId,
-            type: "saldo" as const,
-            balance: body.initialAmount,
-            quota_remaining: 0,
-          }
-        : {
-            business_id: businessId,
-            customer_id: body.customerId,
-            type: "kuota" as const,
-            balance: 0,
-            quota_service_id: body.quotaServiceId,
-            quota_remaining: body.initialAmount,
-          };
+    const { data: existingQuota } = await supabaseAdmin
+      .from("memberships")
+      .select("id, quota_remaining")
+      .eq("business_id", businessId)
+      .eq("customer_id", body.customerId)
+      .eq("type", "kuota")
+      .eq("quota_service_id", pkg.quota_service_id!)
+      .maybeSingle();
+
+    if (existingQuota) {
+      const { data: updated, error: updErr } = await supabaseAdmin
+        .from("memberships")
+        .update({
+          quota_remaining: existingQuota.quota_remaining + creditAmount,
+          package_id: pkg.id,
+        })
+        .eq("id", existingQuota.id)
+        .select(MEMBERSHIP_COLS)
+        .single();
+      if (updErr) {
+        console.error("[MEMBERSHIP QUOTA TOPUP VIA PACKAGE ERROR]", updErr);
+        throw new AppError(500, "Gagal menambah kuota membership");
+      }
+      await supabaseAdmin.from("membership_transactions").insert({
+        business_id: businessId,
+        membership_id: existingQuota.id,
+        change_type: "topup",
+        amount: creditAmount,
+      });
+      return res.status(200).json({ membership: updated });
+    }
 
     const { data, error } = await supabaseAdmin
       .from("memberships")
-      .insert(row)
+      .insert({
+        business_id: businessId,
+        customer_id: body.customerId,
+        type: "kuota",
+        balance: 0,
+        quota_service_id: pkg.quota_service_id,
+        quota_remaining: creditAmount,
+        package_id: pkg.id,
+      })
       .select(MEMBERSHIP_COLS)
       .single();
     if (error) {
       if (error.code === "23505") {
-        throw new AppError(
-          400,
-          body.type === "saldo"
-            ? "Pelanggan sudah punya membership saldo"
-            : "Pelanggan sudah punya kuota untuk layanan ini"
-        );
+        throw new AppError(400, "Pelanggan sudah punya kuota untuk layanan ini");
       }
       console.error("[MEMBERSHIP CREATE ERROR]", error);
-      throw new AppError(500, "Gagal membuat membership");
+      throw new AppError(500, "Gagal mendaftarkan membership");
     }
 
     await supabaseAdmin.from("membership_transactions").insert({
       business_id: businessId,
       membership_id: data.id,
       change_type: "topup",
-      amount: body.initialAmount,
+      amount: creditAmount,
     });
 
     res.status(201).json({ membership: data });
   }
 );
 
-/** POST /api/memberships/:id/topup — owner tambah saldo/kuota. */
+/** POST /api/memberships/:id/topup — owner tambah saldo/kuota manual. */
 membershipsRouter.post(
   "/:id/topup",
   authMiddleware,

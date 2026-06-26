@@ -21,6 +21,13 @@ import {
   DEFAULT_WORK_START,
 } from "../lib/performaCalc.js";
 import { buildInventoryStatusRows } from "../lib/inventoryStatus.js";
+import {
+  calcForecastLabaBersih,
+  calcForecastOmset,
+  calcForecastPengeluaran,
+  monthCalendarMeta,
+  previousMonthPeriod,
+} from "../lib/financeForecast.js";
 
 export const dashboardRouter = Router();
 
@@ -298,6 +305,103 @@ dashboardRouter.get(
     } catch (err) {
       console.error("[DASHBOARD OWNER-OMSET ERROR]", err);
       throw new AppError(500, "Gagal memuat omset");
+    }
+  }
+);
+
+/**
+ * GET /api/dashboard/finance-forecast — prediksi omset, pengeluaran, laba akhir bulan.
+ */
+dashboardRouter.get(
+  "/finance-forecast",
+  authMiddleware,
+  requireRole("owner"),
+  async (req: Request, res: Response) => {
+    const businessId = req.user!.businessId;
+    const now = new Date();
+    const { daysElapsed, daysInMonth, monthLabel } = monthCalendarMeta(now);
+    const { start: monthStart, end: monthEnd, prevStart, prevEnd } =
+      getDateRangeBounds("month");
+    const prevPeriod = previousMonthPeriod(now);
+
+    try {
+      const biz = await getBusinessDashboardSettings(businessId);
+      const workDaysFullMonth = biz.daysTarget;
+
+      const [
+        monthOrders,
+        prevExpenses,
+        prevCommissions,
+        { data: prevPayrolls },
+        { data: activeEmployees },
+      ] = await Promise.all([
+        sumOrders(businessId, monthStart, monthEnd),
+        sumExpenses(businessId, prevStart, prevEnd),
+        sumCommissions(businessId, prevStart, prevEnd),
+        supabaseAdmin
+          .from("payrolls")
+          .select("base_salary")
+          .eq("business_id", businessId)
+          .eq("period", prevPeriod),
+        supabaseAdmin
+          .from("users")
+          .select("id, base_salary")
+          .eq("business_id", businessId)
+          .eq("role", "karyawan")
+          .eq("is_active", true),
+      ]);
+
+      const lastMonthTotalExpense = prevExpenses + prevCommissions;
+      let avgSalaryLastMonth = 0;
+      const payrollRows = prevPayrolls ?? [];
+      if (payrollRows.length > 0) {
+        avgSalaryLastMonth = Math.round(
+          payrollRows.reduce((s, p) => s + (p.base_salary ?? 0), 0) /
+            payrollRows.length
+        );
+      } else {
+        const emps = activeEmployees ?? [];
+        if (emps.length > 0) {
+          avgSalaryLastMonth = Math.round(
+            emps.reduce((s, u) => s + (u.base_salary ?? 0), 0) / emps.length
+          );
+        }
+      }
+
+      const activeEmployeeCount = activeEmployees?.length ?? 0;
+      const forecastOmset = calcForecastOmset(
+        monthOrders.revenue,
+        daysElapsed,
+        daysInMonth
+      );
+      const forecastPengeluaran = calcForecastPengeluaran(
+        lastMonthTotalExpense,
+        avgSalaryLastMonth,
+        workDaysFullMonth,
+        daysInMonth,
+        activeEmployeeCount
+      );
+      const forecastLabaBersih = calcForecastLabaBersih(
+        forecastOmset,
+        forecastPengeluaran
+      );
+
+      res.json({
+        monthLabel,
+        daysElapsed,
+        daysInMonth,
+        revenueMonth: monthOrders.revenue,
+        lastMonthTotalExpense,
+        avgSalaryLastMonth,
+        workDaysFullMonth,
+        activeEmployeeCount,
+        forecastOmset,
+        forecastPengeluaran,
+        forecastLabaBersih,
+      });
+    } catch (err) {
+      console.error("[DASHBOARD FINANCE-FORECAST ERROR]", err);
+      throw new AppError(500, "Gagal memuat prediksi keuangan");
     }
   }
 );

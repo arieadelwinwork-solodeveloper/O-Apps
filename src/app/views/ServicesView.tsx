@@ -309,7 +309,7 @@ export function ServicesView() {
             />
           </Field>
           <Field label="Satuan">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {SERVICE_UNITS.map((u) => (
                 <button
                   key={u.value}

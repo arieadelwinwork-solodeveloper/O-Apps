@@ -4,6 +4,7 @@ import { authMiddleware, requireRole } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { getOpenShiftId } from "../lib/cashShift.js";
+import { resolveOrderStageName } from "../lib/workflowStages.js";
 import {
   computeMembershipDiscount,
   recordMembershipUsage,
@@ -12,15 +13,19 @@ import {
   createOrderSchema,
   updateOrderStatusSchema,
   settlePaymentSchema,
+  completeStageSchema,
+  markPickupSchema,
   type CreateOrderInput,
   type UpdateOrderStatusInput,
   type SettlePaymentInput,
+  type CompleteStageInput,
+  type MarkPickupInput,
 } from "../schemas/orders.js";
 
 export const ordersRouter = Router();
 
 const ORDER_COLS =
-  "id, order_no, customer_id, cashier_id, total, payment_status, paid_amount, remaining_amount, payment_method, proof_url, work_status, membership_used, estimated_done_at, created_at";
+  "id, order_no, customer_id, cashier_id, total, payment_status, paid_amount, remaining_amount, payment_method, proof_url, note, work_status, membership_used, estimated_done_at, picked_up_at, picked_up_by, created_at";
 
 /** Buat nomor nota berurutan harian per bisnis: INV-YYYYMMDD-NNN. */
 async function generateOrderNo(businessId: string): Promise<string> {
@@ -98,7 +103,9 @@ ordersRouter.get("/", authMiddleware, async (req: Request, res: Response) => {
 ordersRouter.get("/:id", authMiddleware, async (req: Request, res: Response) => {
   const { data: order, error } = await supabaseAdmin
     .from("orders")
-    .select(`${ORDER_COLS}, customers(name, phone)`)
+    .select(
+      `${ORDER_COLS}, customers(name, phone), returned_by:users!orders_picked_up_by_fkey(full_name)`
+    )
     .eq("id", req.params.id)
     .eq("business_id", req.user!.businessId)
     .maybeSingle();
@@ -120,7 +127,7 @@ ordersRouter.get("/:id", authMiddleware, async (req: Request, res: Response) => 
   const { data: stages, error: stagesErr } = await supabaseAdmin
     .from("order_stages")
     .select(
-      "id, service_id, name, sort_order, status, commission_type, commission_value, commission_amount, completed_by, completed_at"
+      "id, service_id, name, sort_order, status, commission_type, commission_value, commission_amount, completed_by, completed_at, users!order_stages_completed_by_fkey(full_name)"
     )
     .eq("order_id", order.id)
     .order("sort_order", { ascending: true });
@@ -270,6 +277,7 @@ ordersRouter.post(
         remaining_amount: remaining,
         payment_method: body.paymentMethod,
         proof_url: body.proofUrl ?? null,
+        note: body.note?.trim() || null,
         work_status: "antri",
         membership_used: membershipUsed,
         cash_shift_id: cashShiftId,
@@ -293,12 +301,14 @@ ordersRouter.post(
     }
 
     // Snapshot tahap pengerjaan (Fase E) bila layanan punya tahap.
+    const itemNames = itemRows.map((r) => r.name);
+    const orderNote = body.note?.trim() || null;
     const stageRows = (stages ?? []).map((s) => ({
       business_id: businessId,
       order_id: order.id,
       service_id: s.service_id,
       service_stage_id: s.id,
-      name: s.name,
+      name: resolveOrderStageName(s.name, { note: orderNote, itemNames }),
       sort_order: s.sort_order,
       commission_type: s.commission_type,
       commission_value: s.commission_value,
@@ -334,6 +344,12 @@ ordersRouter.patch(
   validateBody(updateOrderStatusSchema),
   async (req: Request, res: Response) => {
     const body = res.locals.body as UpdateOrderStatusInput;
+    if (body.workStatus === "diambil") {
+      throw new AppError(
+        400,
+        "Gunakan proses pengambilan untuk menandai pesanan diambil"
+      );
+    }
     const { data, error } = await supabaseAdmin
       .from("orders")
       .update({ work_status: body.workStatus })
@@ -410,6 +426,68 @@ ordersRouter.patch(
   }
 );
 
+/** PATCH /api/orders/:id/pickup — tandai diambil (wajib lunas + karyawan penyerah). */
+ordersRouter.patch(
+  "/:id/pickup",
+  authMiddleware,
+  validateBody(markPickupSchema),
+  async (req: Request, res: Response) => {
+    const body = res.locals.body as MarkPickupInput;
+    const businessId = req.user!.businessId;
+
+    const { data: order, error: getErr } = await supabaseAdmin
+      .from("orders")
+      .select("id, work_status, remaining_amount")
+      .eq("id", req.params.id)
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (getErr) {
+      console.error("[ORDER PICKUP GET ERROR]", getErr);
+      throw new AppError(500, "Gagal memuat transaksi");
+    }
+    if (!order) throw new AppError(404, "Transaksi tidak ditemukan");
+    if (order.work_status === "diambil") {
+      throw new AppError(400, "Pesanan sudah diambil");
+    }
+    if (order.work_status !== "selesai") {
+      throw new AppError(400, "Pesanan belum selesai dikerjakan");
+    }
+    if (order.remaining_amount > 0) {
+      throw new AppError(400, "Transaksi wajib lunas sebelum diambil");
+    }
+
+    const { data: worker, error: workerErr } = await supabaseAdmin
+      .from("users")
+      .select("id, is_active")
+      .eq("id", body.returnedByUserId)
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (workerErr || !worker || !worker.is_active) {
+      throw new AppError(400, "Karyawan tidak ditemukan atau nonaktif");
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from("orders")
+      .update({
+        work_status: "diambil",
+        picked_up_at: now,
+        picked_up_by: body.returnedByUserId,
+      })
+      .eq("id", order.id)
+      .eq("business_id", businessId)
+      .select(
+        `${ORDER_COLS}, returned_by:users!orders_picked_up_by_fkey(full_name)`
+      )
+      .single();
+    if (error) {
+      console.error("[ORDER PICKUP ERROR]", error);
+      throw new AppError(500, "Gagal mencatat pengambilan");
+    }
+    res.json({ order: data, pickedUpAt: now });
+  }
+);
+
 /**
  * PATCH /api/orders/:id/stages/:stageId/complete — tandai tahap selesai.
  * Mencatat komisi untuk karyawan penyelesai & memajukan status order otomatis.
@@ -417,8 +495,25 @@ ordersRouter.patch(
 ordersRouter.patch(
   "/:id/stages/:stageId/complete",
   authMiddleware,
+  validateBody(completeStageSchema),
   async (req: Request, res: Response) => {
+    const body = res.locals.body as CompleteStageInput;
     const businessId = req.user!.businessId;
+    const workerId = body.completedByUserId;
+
+    const { data: worker, error: workerErr } = await supabaseAdmin
+      .from("users")
+      .select("id, full_name, is_active")
+      .eq("id", workerId)
+      .eq("business_id", businessId)
+      .maybeSingle();
+    if (workerErr) {
+      console.error("[STAGE WORKER ERROR]", workerErr);
+      throw new AppError(500, "Gagal memvalidasi karyawan");
+    }
+    if (!worker || !worker.is_active) {
+      throw new AppError(400, "Karyawan tidak ditemukan atau nonaktif");
+    }
 
     const { data: stage, error: stageErr } = await supabaseAdmin
       .from("order_stages")
@@ -439,8 +534,10 @@ ordersRouter.patch(
     }
 
     // Hitung komisi: nominal = nilai; persen = base_amount * nilai / 100.
-    const commission =
-      stage.commission_type === "percent"
+    // skipCommission = tahap otomatis (input satu arah) — selesai tanpa komisi.
+    const commission = body.skipCommission
+      ? 0
+      : stage.commission_type === "percent"
         ? Math.round((stage.base_amount * stage.commission_value) / 100)
         : stage.commission_value;
 
@@ -451,7 +548,7 @@ ordersRouter.patch(
       .from("order_stages")
       .update({
         status: "selesai",
-        completed_by: req.user!.id,
+        completed_by: workerId,
         completed_at: now.toISOString(),
         commission_amount: commission,
       })
@@ -466,7 +563,7 @@ ordersRouter.patch(
     if (commission > 0) {
       const { error: commErr } = await supabaseAdmin.from("commissions").insert({
         business_id: businessId,
-        user_id: req.user!.id,
+        user_id: workerId,
         order_id: stage.order_id,
         order_stage_id: stage.id,
         amount: commission,

@@ -15,6 +15,7 @@ import {
   deleteTemplate,
   type TemplateInput,
 } from "../lib/customization";
+import { getBusiness, updateBusinessSettings } from "../lib/printDevices";
 import { Modal, Field, SaveButton, inputClass } from "../components/formui";
 import type { MessageTemplate, TemplateType } from "../types";
 
@@ -40,12 +41,19 @@ export function TemplatesView() {
 
   const [form, setForm] = useState<TemplateInput | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [autoSendComplete, setAutoSendComplete] = useState(false);
+  const [savingSetting, setSavingSetting] = useState(false);
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      setTemplates(await listTemplates());
+      const [tpl, biz] = await Promise.all([
+        listTemplates(),
+        getBusiness().catch(() => null),
+      ]);
+      setTemplates(tpl);
+      setAutoSendComplete(biz?.auto_send_complete_note ?? false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memuat template");
     } finally {
@@ -105,6 +113,20 @@ export function TemplatesView() {
     setForm({ ...form, body: (form.body + " " + v).trim() });
   }
 
+  async function toggleAutoSend() {
+    const next = !autoSendComplete;
+    setSavingSetting(true);
+    setError(null);
+    try {
+      const biz = await updateBusinessSettings({ autoSendCompleteNote: next });
+      setAutoSendComplete(biz.auto_send_complete_note ?? next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal menyimpan pengaturan");
+    } finally {
+      setSavingSetting(false);
+    }
+  }
+
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-4">
@@ -126,6 +148,39 @@ export function TemplatesView() {
           {error}
         </div>
       )}
+
+      <div className="mb-4 bg-white rounded-[20px] p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-slate-800">
+              Langsung Mengirim Nota Selesai
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+              Setelah proses produksi selesai, buka WhatsApp otomatis dengan
+              template pesan selesai.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoSendComplete}
+            disabled={savingSetting}
+            onClick={toggleAutoSend}
+            className={`relative shrink-0 w-12 h-7 rounded-full transition-colors disabled:opacity-60 ${
+              autoSendComplete ? "bg-[#001F5B]" : "bg-slate-200"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${
+                autoSendComplete ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+        <p className="text-[10px] font-medium mt-2 text-slate-500">
+          Status: {autoSendComplete ? "On" : "Off"}
+        </p>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-16 text-slate-400">

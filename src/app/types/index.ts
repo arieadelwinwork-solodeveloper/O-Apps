@@ -11,7 +11,7 @@ export interface AppUser {
 // ---------- Fase B: Customization Engine ----------
 export type CommissionType = "nominal" | "percent";
 export type TemplateType = "nota" | "selesai";
-export type ServiceUnit = "kg" | "pcs" | "paket";
+export type ServiceUnit = "kg" | "pcs" | "paket" | "layanan";
 
 export interface ServiceStage {
   id: string;
@@ -73,11 +73,15 @@ export interface Order {
   remaining_amount: number;
   payment_method: PaymentMethod;
   proof_url: string | null;
+  note: string | null;
   work_status: WorkStatus;
   membership_used?: number;
   estimated_done_at: string | null;
+  picked_up_at?: string | null;
+  picked_up_by?: string | null;
   created_at: string;
   customers?: { name: string; phone: string | null } | null;
+  returned_by?: { full_name: string } | null;
   items?: OrderItem[];
   stages?: OrderStage[];
 }
@@ -130,6 +134,7 @@ export interface OrderStage {
   commission_amount: number;
   completed_by: string | null;
   completed_at: string | null;
+  users?: { full_name: string } | null;
 }
 
 export interface Commission {
@@ -157,6 +162,8 @@ export interface Business {
   attendance_lat?: number | null;
   attendance_lng?: number | null;
   attendance_radius_m?: number | null;
+  /** Kirim WhatsApp nota selesai otomatis setelah semua tahap selesai */
+  auto_send_complete_note?: boolean;
 }
 
 export interface PrintDevice {
@@ -222,6 +229,19 @@ export interface Payroll {
 export type MembershipType = "saldo" | "kuota";
 export type MembershipChangeType = "topup" | "pakai" | "refund";
 
+export interface MembershipPackage {
+  id: string;
+  type: MembershipType;
+  name: string;
+  price: number;
+  saldo_amount: number | null;
+  quota_amount: number | null;
+  quota_service_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  services?: { name: string; unit: string } | null;
+}
+
 export interface Membership {
   id: string;
   customer_id: string;
@@ -229,9 +249,11 @@ export interface Membership {
   balance: number;
   quota_service_id: string | null;
   quota_remaining: number;
+  package_id: string | null;
   created_at: string;
   customers?: { name: string; phone: string | null } | null;
   services?: { name: string; unit: string } | null;
+  membership_packages?: { name: string; price: number } | null;
 }
 
 export interface MembershipTransaction {
@@ -359,6 +381,20 @@ export interface OwnerOmsetSummary {
   chartDaily: OmsetChartPoint[];
   chartWeekly: OmsetChartPoint[];
   chartMonthly: OmsetChartPoint[];
+}
+
+export interface FinanceForecast {
+  monthLabel: string;
+  daysElapsed: number;
+  daysInMonth: number;
+  revenueMonth: number;
+  lastMonthTotalExpense: number;
+  avgSalaryLastMonth: number;
+  workDaysFullMonth: number;
+  activeEmployeeCount: number;
+  forecastOmset: number;
+  forecastPengeluaran: number;
+  forecastLabaBersih: number;
 }
 
 export interface EmployeePerforma {

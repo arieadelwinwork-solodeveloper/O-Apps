@@ -9,6 +9,7 @@ import {
 import type { OmsetChartPoint, OwnerOmsetSummary } from "../types";
 import { MonthProgressBar } from "./omset/MonthProgressBar";
 import { OmsetGroupCard } from "./omset/OmsetGroupCard";
+import { NotificationBell } from "./NotificationBell";
 import { Skeleton } from "./ui/skeleton";
 import {
   ChartContainer,
@@ -173,8 +174,8 @@ export function OwnerSummary() {
         </div>
       )}
 
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-[#001F5B] tracking-tight">
             Omset
           </h2>
@@ -184,11 +185,14 @@ export function OwnerSummary() {
             </p>
           )}
         </div>
-        {lastUpdated && (
-          <p className="text-[11px] sm:text-xs text-slate-400 sm:text-right shrink-0">
-            Terakhir diupdate: {formatLastUpdated(lastUpdated)}
-          </p>
-        )}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <NotificationBell />
+          {lastUpdated && (
+            <p className="text-[10px] text-slate-400 text-right max-w-[9rem] leading-tight">
+              Terakhir diupdate: {formatLastUpdated(lastUpdated)}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-1 p-1 rounded-xl border border-slate-200/80 bg-slate-50/50">

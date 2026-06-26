@@ -1,4 +1,5 @@
 import { apiFetch } from "./api";
+import { isUsingMockApi, mockUploadUrl } from "./mockMode";
 import { supabase } from "./supabase";
 import type { Attendance, AttendanceType, Business } from "../types";
 
@@ -71,6 +72,10 @@ export function getCurrentPosition(): Promise<GeolocationPosition> {
 
 /** Upload foto absensi ke Supabase Storage, balikkan public URL. */
 export async function uploadAttendancePhoto(file: Blob): Promise<string> {
+  if (isUsingMockApi()) {
+    await new Promise((r) => setTimeout(r, 300));
+    return mockUploadUrl("attendance");
+  }
   if (!supabase) throw new Error("Supabase belum dikonfigurasi");
   const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   const { error } = await supabase.storage

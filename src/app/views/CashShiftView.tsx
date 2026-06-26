@@ -134,10 +134,11 @@ export function CashShiftView() {
             <h2 className="text-base font-semibold text-[#001F5B]">Buka Kas</h2>
           </div>
           <p className="text-xs text-slate-400 mb-4">
-            Masukkan modal awal uang di laci untuk memulai shift.
+            Masukkan kas laci terakhir — uang di laci saat tutup toko kemarin —
+            untuk memulai shift.
           </p>
           <label className="block text-xs font-medium text-slate-500 mb-1.5 ml-1">
-            Modal Awal (Rp)
+            Kas Laci Terakhir (Rp)
           </label>
           <input
             value={openingCash}
@@ -168,7 +169,9 @@ export function CashShiftView() {
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="bg-white/10 rounded-xl p-2.5">
-                <div className="text-white/60 mb-0.5">Modal</div>
+                <div className="text-white/60 mb-0.5 leading-tight">
+                  Kas laci terakhir
+                </div>
                 <div className="font-semibold">{rupiah(shift.opening_cash)}</div>
               </div>
               <div className="bg-white/10 rounded-xl p-2.5">

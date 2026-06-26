@@ -96,7 +96,7 @@ export function Login() {
         {import.meta.env.DEV && (
           <div className="mt-6 bg-white rounded-[20px] p-4 border border-dashed border-slate-200">
             <p className="text-xs font-medium text-slate-500 mb-3">
-              Akun demo (jalankan <code className="bg-slate-100 px-1 rounded">npm run seed:dummy</code> di folder server)
+              Akun demo — data UI simulasi, backend tidak wajib
             </p>
             <div className="flex gap-2">
               <button

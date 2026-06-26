@@ -43,8 +43,8 @@ export const MENU_ITEMS: MenuItem[] = [
   },
   {
     id: "membership",
-    title: "Membership",
-    desc: "Saldo & kuota pelanggan",
+    title: "Daftar Membership",
+    desc: "Daftar pelanggan & kelola paket",
     roles: ["owner"],
     ownerCategory: "pelayanan",
   },
@@ -93,8 +93,8 @@ export const MENU_ITEMS: MenuItem[] = [
   // —— Keuangan ——
   {
     id: "keuangan",
-    title: "Omset",
-    desc: "Omset & laba",
+    title: "Ringkasan Keuangan",
+    desc: "Omset, pengeluaran & laba",
     roles: ["owner"],
     ownerCategory: "keuangan",
   },
@@ -118,7 +118,7 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     id: "template",
     title: "Template Nota",
-    desc: "Pesan nota & selesai",
+    desc: "Pesan nota, selesai & auto-kirim",
     roles: ["owner"],
     ownerCategory: "pengaturan",
   },

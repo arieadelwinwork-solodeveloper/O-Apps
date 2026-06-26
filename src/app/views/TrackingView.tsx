@@ -9,6 +9,9 @@ import {
   ListChecks,
 } from "lucide-react";
 import { listOrders, updateOrderStatus } from "../lib/orders";
+import { useOrderPickup } from "../hooks/useOrderPickup";
+import { PickupPaymentDialog } from "../components/order/PickupPaymentDialog";
+import { PickupReturnWorkerDialog } from "../components/order/PickupReturnWorkerDialog";
 import type { Order, WorkStatus } from "../types";
 
 const STEPS: { id: WorkStatus; label: string }[] = [
@@ -56,6 +59,12 @@ export function TrackingView() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const pickup = useOrderPickup((updated) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o))
+    );
+  });
+
   async function load() {
     try {
       setOrders(await listOrders());
@@ -74,6 +83,11 @@ export function TrackingView() {
     const idx = stepIndex(order.work_status);
     if (idx >= STEPS.length - 1) return;
     const next = STEPS[idx + 1].id;
+    if (next === "diambil") {
+      pickup.setError(null);
+      await pickup.startPickup(order);
+      return;
+    }
     setBusyId(order.id);
     setError(null);
     try {
@@ -117,6 +131,11 @@ export function TrackingView() {
       {error && (
         <div className="bg-red-50 text-red-600 text-sm rounded-xl px-4 py-3">
           {error}
+        </div>
+      )}
+      {pickup.error && (
+        <div className="bg-red-50 text-red-600 text-sm rounded-xl px-4 py-3">
+          {pickup.error}
         </div>
       )}
 
@@ -246,6 +265,27 @@ export function TrackingView() {
           );
         })
       )}
+
+      <PickupPaymentDialog
+        open={pickup.paymentOpen}
+        order={pickup.pickupOrder}
+        onClose={() => pickup.setPaymentOpen(false)}
+        onPaid={() => {}}
+        onSettle={pickup.handleSettle}
+      />
+      <PickupReturnWorkerDialog
+        open={pickup.workerOpen}
+        onOpenChange={(open) => {
+          if (!open) pickup.closeAll();
+          else pickup.setWorkerOpen(true);
+        }}
+        employees={pickup.employees}
+        selectedId={pickup.selectedWorkerId}
+        onSelect={pickup.setSelectedWorkerId}
+        onConfirm={pickup.confirmPickup}
+        onCancel={pickup.closeAll}
+        loading={pickup.busy}
+      />
     </div>
   );
 }

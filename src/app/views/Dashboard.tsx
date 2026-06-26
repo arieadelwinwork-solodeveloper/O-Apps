@@ -4,8 +4,10 @@ import { LogOut } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { EmployeeSummary } from "../components/EmployeeSummary";
 import { OwnerSummary } from "../components/OwnerSummary";
+import { DashboardAccordion } from "../components/DashboardAccordion";
 import { PerformaSection } from "../components/PerformaSection";
 import { InventoryStatusSection } from "../components/InventoryStatusSection";
+import { DASHBOARD_SECTION_ICONS } from "../config/dashboardSections";
 import { MenuSheet, isValidMenuId } from "../components/MenuSheet";
 import { HoverSidebar } from "../components/HoverSidebar";
 import {
@@ -185,9 +187,18 @@ export function Dashboard() {
           {role === "karyawan" && <EmployeeSummary />}
           {role === "owner" && <OwnerSummary />}
 
-          <PerformaSection />
+          <div className="space-y-3">
+            <DashboardAccordion title="Performa" icon={DASHBOARD_SECTION_ICONS.performa}>
+              <PerformaSection />
+            </DashboardAccordion>
 
-          <InventoryStatusSection />
+            <DashboardAccordion
+              title="Status Inventori"
+              icon={DASHBOARD_SECTION_ICONS.inventori}
+            >
+              <InventoryStatusSection />
+            </DashboardAccordion>
+          </div>
         </div>
 
         <FullMenuPanel

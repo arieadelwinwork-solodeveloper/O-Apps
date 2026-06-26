@@ -37,7 +37,6 @@ function punctualityColor(score: number, passing: number): string {
 function PerformaSkeleton() {
   return (
     <div className="space-y-4">
-      <Skeleton className="h-7 w-28" />
       <Skeleton className="h-4 w-20" />
       <Skeleton className="h-10 w-full rounded-xl" />
       <Skeleton className="h-20 w-full rounded-xl" />
@@ -86,11 +85,7 @@ export function PerformaSection() {
         </div>
       )}
 
-      <h2 className="text-lg font-semibold text-[#001F5B] tracking-tight">
-        Performa
-      </h2>
-
-      <p className="text-sm font-medium text-slate-700 -mt-2">Karyawan</p>
+      <p className="text-sm font-medium text-slate-700">Karyawan</p>
 
       {data && data.employees.length === 0 && (
         <p className="text-xs text-slate-400 py-2">

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const commissionType = z.enum(["nominal", "percent"]);
 const templateType = z.enum(["nota", "selesai"]);
-const serviceUnit = z.enum(["kg", "pcs", "paket"]);
+const serviceUnit = z.enum(["kg", "pcs", "paket", "layanan"]);
 
 // ---------- Services ----------
 export const createServiceSchema = z.object({

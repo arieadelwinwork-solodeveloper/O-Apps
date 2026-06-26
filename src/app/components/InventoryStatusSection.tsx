@@ -27,7 +27,6 @@ function stockColor(current: number, min: number): string {
 function InventorySkeleton() {
   return (
     <div className="space-y-4">
-      <Skeleton className="h-7 w-32" />
       <Skeleton className="h-10 w-full rounded-xl" />
       <Skeleton className="h-24 w-full rounded-xl" />
     </div>
@@ -57,6 +56,15 @@ export function InventoryStatusSection() {
     load();
   }, []);
 
+  const totalPredicted = items.reduce(
+    (sum, item) =>
+      item.predictedExpense !== null ? sum + item.predictedExpense : sum,
+    0
+  );
+  const hasPredictableTotal = items.some(
+    (item) => item.predictedExpense !== null
+  );
+
   if (loading) return <InventorySkeleton />;
 
   return (
@@ -73,10 +81,6 @@ export function InventoryStatusSection() {
           </button>
         </div>
       )}
-
-      <h2 className="text-lg font-semibold text-[#001F5B] tracking-tight">
-        Status Inventori
-      </h2>
 
       {items.length === 0 && !error && (
         <p className="text-xs text-slate-400 py-2">
@@ -133,6 +137,25 @@ export function InventoryStatusSection() {
                 />
               </div>
             ))}
+          </div>
+
+          <div
+            className={`grid ${COLS} items-center min-w-[320px] px-3 sm:px-4 py-3 bg-slate-50/80 border-t border-slate-200/80`}
+          >
+            <p className="text-xs sm:text-sm font-semibold text-slate-700 pr-1 col-span-1">
+              Total estimasi
+            </p>
+            <span className="col-span-3 border-l border-slate-100" aria-hidden />
+            <Cell
+              value={
+                hasPredictableTotal
+                  ? formatRupiah(totalPredicted)
+                  : "?"
+              }
+              color={hasPredictableTotal ? "#001F5B" : "#94A3B8"}
+              small
+              emphasize
+            />
           </div>
         </div>
       )}

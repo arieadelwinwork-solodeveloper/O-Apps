@@ -1,6 +1,7 @@
 import { apiFetch } from "./api";
 import type {
   Membership,
+  MembershipPackage,
   MembershipTransaction,
   MembershipType,
 } from "../types";
@@ -19,6 +20,52 @@ export const CHANGE_TYPE_LABEL: Record<string, string> = {
   pakai: "Pakai",
   refund: "Refund",
 };
+
+export async function listMembershipPackages(opts?: {
+  activeOnly?: boolean;
+}): Promise<MembershipPackage[]> {
+  const qs = opts?.activeOnly ? "?activeOnly=1" : "";
+  const { packages } = await apiFetch<{ packages: MembershipPackage[] }>(
+    `/api/membership-packages${qs}`
+  );
+  return packages;
+}
+
+export type CreateSaldoPackageInput = {
+  type: "saldo";
+  name: string;
+  price: number;
+  saldoAmount: number;
+};
+
+export type CreateKuotaPackageInput = {
+  type: "kuota";
+  name: string;
+  price: number;
+  quotaAmount: number;
+  quotaServiceId: string;
+};
+
+export async function createMembershipPackage(
+  input: CreateSaldoPackageInput | CreateKuotaPackageInput
+): Promise<MembershipPackage> {
+  const { package: pkg } = await apiFetch<{ package: MembershipPackage }>(
+    "/api/membership-packages",
+    { method: "POST", body: JSON.stringify(input) }
+  );
+  return pkg;
+}
+
+export async function setMembershipPackageActive(
+  id: string,
+  isActive: boolean
+): Promise<MembershipPackage> {
+  const { package: pkg } = await apiFetch<{ package: MembershipPackage }>(
+    `/api/membership-packages/${id}`,
+    { method: "PATCH", body: JSON.stringify({ isActive }) }
+  );
+  return pkg;
+}
 
 export async function listMemberships(opts?: {
   customerId?: string;
@@ -43,15 +90,13 @@ export async function listMembershipTransactions(
   return transactions;
 }
 
-export interface CreateMembershipInput {
+export interface RegisterMembershipInput {
   customerId: string;
-  type: MembershipType;
-  initialAmount: number;
-  quotaServiceId?: string;
+  packageId: string;
 }
 
-export async function createMembership(
-  input: CreateMembershipInput
+export async function registerMembership(
+  input: RegisterMembershipInput
 ): Promise<Membership> {
   const { membership } = await apiFetch<{ membership: Membership }>(
     "/api/memberships",
@@ -68,4 +113,13 @@ export async function topupMembership(
     method: "POST",
     body: JSON.stringify({ amount }),
   });
+}
+
+export function describePackage(pkg: MembershipPackage): string {
+  if (pkg.type === "saldo") {
+    return `${formatRupiah(pkg.saldo_amount ?? 0)} saldo`;
+  }
+  const svc = pkg.services?.name ?? "layanan";
+  const unit = pkg.services?.unit ?? "unit";
+  return `${pkg.quota_amount} ${unit} ${svc}`;
 }

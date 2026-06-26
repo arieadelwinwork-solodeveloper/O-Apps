@@ -6,6 +6,16 @@ export async function getBusiness(): Promise<Business> {
   return business;
 }
 
+export async function updateBusinessSettings(
+  patch: Partial<{ autoSendCompleteNote: boolean }>
+): Promise<Business> {
+  const { business } = await apiFetch<{ business: Business }>("/api/business", {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  return business;
+}
+
 export async function listPrintDevices(): Promise<PrintDevice[]> {
   const { devices } = await apiFetch<{ devices: PrintDevice[] }>(
     "/api/print-devices"

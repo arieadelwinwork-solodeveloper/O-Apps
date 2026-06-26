@@ -11,7 +11,7 @@ import {
 export const businessRouter = Router();
 
 const BUSINESS_COLS =
-  "id, name, address, phone, attendance_lat, attendance_lng, attendance_radius_m";
+  "id, name, address, phone, attendance_lat, attendance_lng, attendance_radius_m, auto_send_complete_note";
 
 /** GET /api/business — info bisnis user yang login (header nota, konfigurasi absensi). */
 businessRouter.get("/", authMiddleware, async (req: Request, res: Response) => {
@@ -44,6 +44,8 @@ businessRouter.patch(
     if (body.attendanceLng !== undefined) patch.attendance_lng = body.attendanceLng;
     if (body.attendanceRadiusM !== undefined)
       patch.attendance_radius_m = body.attendanceRadiusM;
+    if (body.autoSendCompleteNote !== undefined)
+      patch.auto_send_complete_note = body.autoSendCompleteNote;
 
     if (Object.keys(patch).length === 0) return res.json({ success: true });
 
