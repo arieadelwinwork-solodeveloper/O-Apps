@@ -180,7 +180,7 @@ function createOrderFromInput(input: MockCreateOrderInput): Order {
     payment_method: input.paymentMethod,
     proof_url: input.proofUrl ?? null,
     note: input.note?.trim() || null,
-    work_status: "antri",
+    work_status: "proses",
     membership_used: membershipDiscount,
     estimated_done_at: input.estimatedDoneAt ?? null,
     created_at: new Date().toISOString(),
@@ -252,7 +252,12 @@ export async function mockApiFetch<T>(
     const status = params.get("status");
     let list = [...s.orders];
     if (status) list = list.filter((o) => o.work_status === status);
-    return { orders: list } as T;
+    return {
+      orders: list.map((o) => ({
+        ...o,
+        stages: stagesForOrder(s, o.id, o.stages),
+      })),
+    } as T;
   }
   if (pathname === "/api/orders" && method === "POST") {
     const input = body<MockCreateOrderInput>(options);

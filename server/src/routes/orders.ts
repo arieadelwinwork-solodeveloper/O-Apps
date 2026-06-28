@@ -83,7 +83,9 @@ async function findOrCreateCustomer(
 ordersRouter.get("/", authMiddleware, async (req: Request, res: Response) => {
   let query = supabaseAdmin
     .from("orders")
-    .select(`${ORDER_COLS}, customers(name, phone)`)
+    .select(
+      `${ORDER_COLS}, customers(name, phone), order_stages(id, status, sort_order)`
+    )
     .eq("business_id", req.user!.businessId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -96,7 +98,18 @@ ordersRouter.get("/", authMiddleware, async (req: Request, res: Response) => {
     console.error("[ORDERS LIST ERROR]", error);
     throw new AppError(500, "Gagal memuat transaksi");
   }
-  res.json({ orders: data });
+
+  const orders = (data ?? []).map((row) => {
+    const { order_stages, ...order } = row as typeof row & {
+      order_stages?: { id: string; status: string; sort_order: number }[];
+    };
+    const stages = [...(order_stages ?? [])].sort(
+      (a, b) => a.sort_order - b.sort_order
+    );
+    return { ...order, stages };
+  });
+
+  res.json({ orders });
 });
 
 /** GET /api/orders/:id — detail order + item. */
@@ -278,7 +291,7 @@ ordersRouter.post(
         payment_method: body.paymentMethod,
         proof_url: body.proofUrl ?? null,
         note: body.note?.trim() || null,
-        work_status: "antri",
+        work_status: "proses",
         membership_used: membershipUsed,
         cash_shift_id: cashShiftId,
         estimated_done_at: body.estimatedDoneAt ?? null,
