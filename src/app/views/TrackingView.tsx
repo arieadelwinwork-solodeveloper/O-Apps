@@ -166,20 +166,20 @@ export function TrackingView() {
               <div className="flex items-center justify-center gap-2 text-[11px] border-t border-slate-50 pt-3 mt-1">
                   <button
                     onClick={() => navigate(`/transaksi/${order.id}`)}
-                    className="flex items-center gap-1 text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg font-light"
+                    className="flex items-center gap-1 text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg font-normal"
                   >
                     <ListChecks className="w-3 h-3" /> Detail
                   </button>
                   <button
                     onClick={() => sendWhatsApp(order)}
-                    className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg font-light"
+                    className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2.5 py-1.5 rounded-lg font-normal"
                   >
                     <MessageCircle className="w-3 h-3" /> WhatsApp
                   </button>
                   <button
                     onClick={() => advance(order)}
                     disabled={pickupDisabled}
-                    className="flex items-center gap-1 text-[#001F5B] bg-[#001F5B]/5 px-2.5 py-1.5 rounded-lg font-light disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1 text-[#001F5B] bg-[#001F5B]/5 px-2.5 py-1.5 rounded-lg font-normal disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {pickup.busy && canPickup ? (
                       <Loader2 className="w-3 h-3 animate-spin" />

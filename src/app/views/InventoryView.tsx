@@ -24,6 +24,7 @@ import {
   isLowStock,
   formatStock,
   CHANGE_TYPE_LABEL,
+  formatMovementDate,
 } from "../lib/inventory";
 import type { InventoryItem, InventoryMovement, InventoryChangeType } from "../types";
 
@@ -300,7 +301,7 @@ export function InventoryView() {
                         className="text-[10px] font-medium px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 flex items-center gap-1"
                       >
                         <Settings2 className="w-3 h-3" />
-                        Koreksi
+                        Opname
                       </button>
                       <button
                         onClick={() => {
@@ -331,38 +332,55 @@ export function InventoryView() {
                 </div>
 
                 {expandedId === item.id && movMap[item.id] && (
-                  <div className="mt-3 pt-3 border-t border-dashed border-black/[0.06] space-y-1.5">
+                  <div className="mt-3 pt-3 border-t border-dashed border-black/[0.06]">
                     {movMap[item.id].length === 0 ? (
                       <p className="text-xs text-slate-400">Belum ada mutasi.</p>
                     ) : (
-                      movMap[item.id].map((m) => (
-                        <div
-                          key={m.id}
-                          className="flex justify-between text-xs text-slate-600"
-                        >
-                          <span>
-                            {CHANGE_TYPE_LABEL[m.change_type]}
-                            {m.users?.full_name
-                              ? ` · ${m.users.full_name}`
-                              : ""}
-                          </span>
-                          <span
-                            className={
-                              m.change_type === "masuk"
-                                ? "text-emerald-600"
-                                : m.change_type === "keluar"
-                                ? "text-red-500"
-                                : "text-slate-600"
-                            }
-                          >
-                            {m.change_type === "adjust"
-                              ? `→ ${m.qty}`
-                              : m.change_type === "masuk"
-                              ? `+${m.qty}`
-                              : `−${m.qty}`}
-                          </span>
+                      <>
+                        <div className="grid grid-cols-[minmax(0,5.5rem)_1fr_auto] gap-x-2 gap-y-1 text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-1.5 px-0.5">
+                          <span>Tanggal</span>
+                          <span>Mutasi</span>
+                          <span className="text-right">Jumlah</span>
                         </div>
-                      ))
+                        <div className="space-y-1.5">
+                          {movMap[item.id].map((m) => (
+                            <div
+                              key={m.id}
+                              className="grid grid-cols-[minmax(0,5.5rem)_1fr_auto] gap-x-2 gap-y-0.5 text-xs text-slate-600 items-start"
+                            >
+                              <span className="text-slate-500 tabular-nums leading-snug">
+                                {formatMovementDate(m.created_at)}
+                              </span>
+                              <span className="leading-snug">
+                                {CHANGE_TYPE_LABEL[m.change_type]}
+                                {m.users?.full_name
+                                  ? ` · ${m.users.full_name}`
+                                  : ""}
+                                {m.note ? (
+                                  <span className="block text-[10px] text-slate-400 font-normal">
+                                    {m.note}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span
+                                className={`text-right font-medium tabular-nums ${
+                                  m.change_type === "masuk"
+                                    ? "text-emerald-600"
+                                    : m.change_type === "keluar"
+                                    ? "text-red-500"
+                                    : "text-slate-600"
+                                }`}
+                              >
+                                {m.change_type === "adjust"
+                                  ? `→ ${m.qty}`
+                                  : m.change_type === "masuk"
+                                  ? `+${m.qty}`
+                                  : `−${m.qty}`}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

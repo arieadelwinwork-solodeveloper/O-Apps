@@ -421,6 +421,14 @@ export function createSeedData() {
         created_at: iso(daysAgo(2)),
         users: { full_name: "Siti Kasir" },
       },
+      {
+        id: "im-003",
+        change_type: "adjust",
+        qty: 17,
+        note: "Stok opname bulanan",
+        created_at: iso(daysAgo(7)),
+        users: { full_name: "Budi Owner" },
+      },
     ],
   };
 

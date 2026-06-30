@@ -745,6 +745,16 @@ export async function mockApiFetch<T>(
       if (input.changeType === "masuk") item.current_stock += input.qty;
       else if (input.changeType === "keluar") item.current_stock -= input.qty;
       else item.current_stock = input.qty;
+      const list = s.inventoryMovements[item.id] ?? [];
+      list.unshift({
+        id: uid("im"),
+        change_type: input.changeType as "masuk" | "keluar" | "adjust",
+        qty: input.qty,
+        note: input.note ?? null,
+        created_at: new Date().toISOString(),
+        users: { full_name: "Demo User" },
+      });
+      s.inventoryMovements[item.id] = list;
     }
     return { currentStock: item?.current_stock ?? 0 } as T;
   }

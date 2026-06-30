@@ -8,8 +8,16 @@ import type {
 export const CHANGE_TYPE_LABEL: Record<InventoryChangeType, string> = {
   masuk: "Masuk",
   keluar: "Keluar",
-  adjust: "Koreksi",
+  adjust: "Stok Opname",
 };
+
+export function formatMovementDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 export async function listInventory(lowStockOnly?: boolean): Promise<InventoryItem[]> {
   const qs = lowStockOnly ? "?lowStock=1" : "";
