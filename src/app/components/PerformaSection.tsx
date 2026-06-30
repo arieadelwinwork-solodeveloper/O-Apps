@@ -9,19 +9,13 @@ function formatScore(n: number): string {
   return n.toLocaleString("id-ID", { maximumFractionDigits: 1 });
 }
 
-/** Skor 1–10: merah di bawah 5, hijau di atas 5, gradien sesuai nilai. */
+/** Skor layanan 0–100: merah <70, kuning 70–79, hijau ≥80. */
 function serviceScoreColor(score: number): string {
   if (score <= 0) return "#94a3b8";
-  const s = Math.max(1, Math.min(10, score));
-  if (s < 5) {
-    const t = (s - 1) / 4;
-    return `hsl(0, ${78 - t * 12}%, ${38 + t * 20}%)`;
-  }
-  if (s > 5) {
-    const t = (s - 5) / 5;
-    return `hsl(${105 + t * 25}, ${52 + t * 18}%, ${38 - t * 6}%)`;
-  }
-  return "#64748b";
+  if (score >= 90) return "#16a34a";
+  if (score >= 80) return "#22c55e";
+  if (score >= 70) return "#ca8a04";
+  return "#dc2626";
 }
 
 function punctualityColor(score: number, passing: number): string {

@@ -712,6 +712,7 @@ export async function mockApiFetch<T>(
       ],
       toFinish: { total: 4, late: 2 },
       orderCountToday: 3,
+      revenueToday: 720_000,
       expensesToday: 75_000,
       cashDrawer: { expectedCash: 1_250_000 },
     } as T;
@@ -765,6 +766,25 @@ export async function mockApiFetch<T>(
       }),
     }) as T;
   }
+  if (pathname === "/api/dashboard/me-performa-chart" && method === "GET") {
+    const points: { date: string; label: string; layanan: number }[] = [];
+    const layananSeries = [72, 68, 85, 90, 88, 92, 78, 82, 91, 86, 89, 94, 88, 92];
+    const onTimeDays = 12;
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(12, 0, 0, 0);
+      const date = d.toISOString().slice(0, 10);
+      const idx = 13 - i;
+      points.push({
+        date,
+        label: d.toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
+        layanan: layananSeries[idx] ?? 0,
+      });
+    }
+    const punctualityPercent = Math.round((onTimeDays / 14) * 100);
+    return { points, punctualityPercent } as T;
+  }
   if (pathname === "/api/dashboard/performa" && method === "GET") {
     return {
       effectiveDays: 20,
@@ -773,7 +793,7 @@ export async function mockApiFetch<T>(
         {
           userId: IDS.karyawan,
           fullName: "Siti Kasir",
-          servicePerformance: 92,
+          servicePerformance: 100,
           punctuality: 88,
           commission: 420_000,
           onTimeDays: 18,
@@ -781,7 +801,7 @@ export async function mockApiFetch<T>(
         {
           userId: IDS.karyawan2,
           fullName: "Andi Operator",
-          servicePerformance: 85,
+          servicePerformance: 80,
           punctuality: 76,
           commission: 280_000,
           onTimeDays: 15,

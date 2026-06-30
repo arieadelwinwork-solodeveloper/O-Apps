@@ -379,6 +379,7 @@ export interface MeTodaySummary {
   activitiesToday: MeTodayActivity[];
   toFinish: { total: number; late: number };
   orderCountToday: number;
+  revenueToday: number;
   expensesToday: number;
   cashDrawer: { expectedCash: number } | null;
 }
@@ -429,6 +430,18 @@ export interface PerformaSummary {
   effectiveDays: number;
   punctualityPassing: number;
   employees: EmployeePerforma[];
+}
+
+export interface PerformaChartPoint {
+  label: string;
+  date: string;
+  layanan: number;
+}
+
+export interface MePerformaChart {
+  points: PerformaChartPoint[];
+  /** 0–100: warna chart layanan (hijau/kuning/merah). */
+  punctualityPercent: number;
 }
 
 export interface InventoryStatusItem {

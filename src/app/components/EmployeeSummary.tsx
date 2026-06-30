@@ -5,9 +5,11 @@ import {
   Receipt,
   Wallet,
   ShoppingBag,
+  TrendingUp,
 } from "lucide-react";
 import { getMeToday, formatRupiah } from "../lib/dashboard";
 import type { MeTodaySummary } from "../types";
+import { EmployeePerformaChart } from "./EmployeePerformaChart";
 import { Skeleton } from "./ui/skeleton";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -76,6 +78,10 @@ function StatItem({
 function SummarySkeleton() {
   return (
     <div className="space-y-4">
+      <Skeleton className="h-4 w-20" />
+      <Skeleton className="h-[200px] rounded-xl" />
+      <Skeleton className="h-4 w-36" />
+      <Skeleton className="h-24 rounded-xl" />
       <Skeleton className="h-4 w-32" />
       <div className="space-y-3">
         <Skeleton className="h-28 rounded-xl" />
@@ -83,6 +89,43 @@ function SummarySkeleton() {
         <Skeleton className="h-24 rounded-xl" />
       </div>
     </div>
+  );
+}
+
+function TodayWorkList({ data }: { data: MeTodaySummary | null }) {
+  return (
+    <>
+      <SectionLabel>Pengerjaan Hari Ini</SectionLabel>
+
+      {data && data.activitiesToday.length > 0 && (
+        <div className="border border-slate-200/80 rounded-xl divide-y divide-slate-200/80 bg-white">
+          {data.activitiesToday.map((a) => (
+            <div key={a.id} className="px-4 py-3">
+              <div className="text-sm font-semibold text-[#001F5B]">
+                {a.stageName} 1×
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {a.transactionCode} - {a.customerName} - {a.serviceName}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {data && data.activitiesToday.length === 0 && (
+        <div className="border border-slate-200/80 rounded-xl px-4 py-3 text-center bg-white">
+          <p className="text-xs text-slate-400">
+            Belum ada tahap pengerjaan selesai hari ini.
+          </p>
+        </div>
+      )}
+
+      {!data && (
+        <div className="border border-slate-200/80 rounded-xl px-4 py-3 text-center bg-white">
+          <p className="text-xs text-slate-400">Menunggu data pengerjaan.</p>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -142,9 +185,32 @@ export function EmployeeSummary() {
         </div>
       )}
 
+      <SectionLabel>Performa</SectionLabel>
+      <p className="text-xs text-slate-500 -mt-2 mb-3 leading-relaxed">
+        Performa dihitung dari seberapa banyak komisi / poin yang dikumpulkan.
+      </p>
+      <EmployeePerformaChart />
+
+      <TodayWorkList data={data} />
+
       <SectionLabel>Rangkuman Hari Ini</SectionLabel>
 
       <div className="space-y-3">
+        <StatGroup>
+          <StatItem
+            icon={TrendingUp}
+            label="Omset Hari Ini"
+            value={data ? formatRupiah(data.revenueToday) : "—"}
+            sub="total penjualan hari ini"
+          />
+          <StatItem
+            icon={Receipt}
+            label="Pengeluaran"
+            value={data ? formatRupiah(data.expensesToday) : "—"}
+            sub="hari ini"
+          />
+        </StatGroup>
+
         <StatGroup>
           <StatItem
             icon={ShoppingBag}
@@ -179,15 +245,6 @@ export function EmployeeSummary() {
             sub={showCashDrawer ? "kas seharusnya" : "belum dibuka"}
           />
           <StatItem
-            icon={Receipt}
-            label="Pengeluaran"
-            value={data ? formatRupiah(data.expensesToday) : "—"}
-            sub="hari ini"
-          />
-        </StatGroup>
-
-        <StatGroup cols={1}>
-          <StatItem
             icon={Fingerprint}
             label="Absensi Bulan Ini"
             value={
@@ -199,31 +256,6 @@ export function EmployeeSummary() {
           />
         </StatGroup>
       </div>
-
-      <SectionLabel>Pengerjaan Hari Ini</SectionLabel>
-
-      {data && data.activitiesToday.length > 0 && (
-        <div className="border border-slate-200/80 rounded-xl divide-y divide-slate-200/80">
-          {data.activitiesToday.map((a) => (
-            <div key={a.id} className="px-4 py-3">
-              <div className="text-sm font-semibold text-[#001F5B]">
-                {a.stageName} 1×
-              </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                {a.transactionCode} - {a.customerName} - {a.serviceName}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {data && data.activitiesToday.length === 0 && (
-        <div className="border border-slate-200/80 rounded-xl px-4 py-3 text-center">
-          <p className="text-xs text-slate-400">
-            Belum ada tahap pengerjaan selesai hari ini.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

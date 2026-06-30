@@ -7,6 +7,7 @@ import type {
   MeTodaySummary,
   OwnerOmsetSummary,
   PerformaSummary,
+  MePerformaChart,
   InventoryStatusItem,
   FinanceForecast,
 } from "../types";
@@ -52,6 +53,10 @@ export async function getFinanceForecast(): Promise<FinanceForecast> {
 
 export async function getPerforma(): Promise<PerformaSummary> {
   return apiFetch<PerformaSummary>("/api/dashboard/performa");
+}
+
+export async function getMePerformaChart(): Promise<MePerformaChart> {
+  return apiFetch<MePerformaChart>("/api/dashboard/me-performa-chart");
 }
 
 export async function getInventoryStatus(): Promise<{

@@ -17,6 +17,8 @@ import {
 import {
   calcServicePerformance,
   calcPunctuality,
+  calcDailyServiceScore100,
+  calcPeriodPunctualityPercent,
   isOnTimeAttendance,
   DEFAULT_WORK_START,
 } from "../lib/performaCalc.js";
@@ -114,6 +116,17 @@ async function getBusinessDashboardSettings(
     cashDrawerVisibility: data.cash_drawer_visibility ?? "all",
     cashDrawerUserIds: data.cash_drawer_user_ids ?? [],
   };
+}
+
+/** Jumlah karyawan aktif di bisnis (pembagi benchmark performa layanan). */
+async function countKaryawan(businessId: string): Promise<number> {
+  const { count, error } = await supabaseAdmin
+    .from("users")
+    .select("id", { count: "exact", head: true })
+    .eq("business_id", businessId)
+    .eq("role", "karyawan");
+  if (error || !count || count < 1) return 1;
+  return count;
 }
 
 /**
@@ -433,6 +446,8 @@ dashboardRouter.get(
       const { data: employees, error: empErr } = await empQuery;
       if (empErr) throw empErr;
 
+      const employeeCount = await countKaryawan(businessId);
+
       const [{ data: commRows }, { data: attRows }] = await Promise.all([
         supabaseAdmin
           .from("commissions")
@@ -480,7 +495,11 @@ dashboardRouter.get(
         return {
           userId: e.id,
           fullName: e.full_name,
-          servicePerformance: calcServicePerformance(commission, totalCommission),
+          servicePerformance: calcServicePerformance(
+            commission,
+            totalCommission,
+            employeeCount
+          ),
           punctuality: calcPunctuality(onTimeDays, effectiveDays),
           commission,
           onTimeDays,
@@ -581,8 +600,124 @@ dashboardRouter.get(
   }
 );
 
+const ME_PERFORMA_CHART_DAYS = 14;
+
+function buildPerformaChartDayKeys(count: number): string[] {
+  const keys: string[] = [];
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  for (let i = count - 1; i >= 0; i--) {
+    const day = new Date(d);
+    day.setDate(day.getDate() - i);
+    keys.push(day.toISOString().slice(0, 10));
+  }
+  return keys;
+}
+
+function formatPerformaChartLabel(isoDate: string): string {
+  const d = new Date(isoDate + "T12:00:00");
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+}
+
 /**
- * GET /api/dashboard/me-today — rangkuman harian karyawan (tanpa omset).
+ * GET /api/dashboard/me-performa-chart — tren performa harian karyawan (14 hari).
+ */
+dashboardRouter.get(
+  "/me-performa-chart",
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    const businessId = req.user!.businessId;
+    const userId = req.user!.id;
+    const dayKeys = buildPerformaChartDayKeys(ME_PERFORMA_CHART_DAYS);
+    const rangeStart = new Date(dayKeys[0] + "T00:00:00").toISOString();
+    const rangeEnd = new Date(
+      dayKeys[dayKeys.length - 1] + "T23:59:59.999"
+    ).toISOString();
+
+    try {
+      const employeeCount = await countKaryawan(businessId);
+
+      const [{ data: commRows }, { data: attRows }] = await Promise.all([
+        supabaseAdmin
+          .from("commissions")
+          .select("user_id, amount, created_at")
+          .eq("business_id", businessId)
+          .gte("created_at", rangeStart)
+          .lte("created_at", rangeEnd),
+        supabaseAdmin
+          .from("attendances")
+          .select("user_id, created_at")
+          .eq("business_id", businessId)
+          .eq("user_id", userId)
+          .eq("type", "masuk")
+          .eq("is_valid", true)
+          .gte("created_at", rangeStart)
+          .lte("created_at", rangeEnd),
+      ]);
+
+      const commByDay = new Map<string, { mine: number; total: number }>();
+      for (const key of dayKeys) {
+        commByDay.set(key, { mine: 0, total: 0 });
+      }
+      for (const c of commRows ?? []) {
+        const day = new Date(c.created_at).toISOString().slice(0, 10);
+        const bucket = commByDay.get(day);
+        if (!bucket) continue;
+        bucket.total += c.amount;
+        if (c.user_id === userId) bucket.mine += c.amount;
+      }
+
+      const attendanceByDay = new Map<
+        string,
+        { attended: boolean; onTime: boolean }
+      >();
+      for (const a of attRows ?? []) {
+        const day = new Date(a.created_at).toISOString().slice(0, 10);
+        const onTime = isOnTimeAttendance(
+          a.created_at,
+          DEFAULT_WORK_START.hour,
+          DEFAULT_WORK_START.minute
+        );
+        const prev = attendanceByDay.get(day);
+        if (!prev || onTime) {
+          attendanceByDay.set(day, { attended: true, onTime });
+        } else if (!prev.onTime) {
+          attendanceByDay.set(day, { attended: true, onTime: false });
+        }
+      }
+
+      const points = dayKeys.map((date) => {
+        const comm = commByDay.get(date)!;
+        const att = attendanceByDay.get(date);
+        return {
+          date,
+          label: formatPerformaChartLabel(date),
+          layanan: calcDailyServiceScore100(
+            comm.mine,
+            comm.total,
+            employeeCount
+          ),
+        };
+      });
+
+      const onTimeDays = [...attendanceByDay.values()].filter(
+        (a) => a.onTime
+      ).length;
+      const punctualityPercent = calcPeriodPunctualityPercent(
+        onTimeDays,
+        ME_PERFORMA_CHART_DAYS
+      );
+
+      res.json({ points, punctualityPercent });
+    } catch (err) {
+      console.error("[ME PERFORMA CHART ERROR]", err);
+      throw new AppError(500, "Gagal memuat chart performa");
+    }
+  }
+);
+
+/**
+ * GET /api/dashboard/me-today — rangkuman harian karyawan.
  */
 dashboardRouter.get(
   "/me-today",
@@ -660,6 +795,12 @@ dashboardRouter.get(
         .gte("created_at", todayStart)
         .lte("created_at", todayEnd);
 
+      const { revenue: revenueToday } = await sumOrders(
+        businessId,
+        todayStart,
+        todayEnd
+      );
+
       const expensesToday = await sumExpenses(
         businessId,
         todayStart,
@@ -689,6 +830,7 @@ dashboardRouter.get(
         activitiesToday,
         toFinish: { total: toFinishTotal, late: toFinishLate },
         orderCountToday: orderCountToday ?? 0,
+        revenueToday,
         expensesToday,
         cashDrawer,
       });

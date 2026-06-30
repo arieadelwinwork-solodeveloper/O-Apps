@@ -187,18 +187,18 @@ export function Dashboard() {
           {role === "karyawan" && <EmployeeSummary />}
           {role === "owner" && <OwnerSummary />}
 
-          <div className="space-y-3">
+          {role === "owner" && (
             <DashboardAccordion title="Performa" icon={DASHBOARD_SECTION_ICONS.performa}>
               <PerformaSection />
             </DashboardAccordion>
+          )}
 
-            <DashboardAccordion
-              title="Status Inventori"
-              icon={DASHBOARD_SECTION_ICONS.inventori}
-            >
-              <InventoryStatusSection />
-            </DashboardAccordion>
-          </div>
+          <DashboardAccordion
+            title="Status Inventori"
+            icon={DASHBOARD_SECTION_ICONS.inventori}
+          >
+            <InventoryStatusSection />
+          </DashboardAccordion>
         </div>
 
         <FullMenuPanel
