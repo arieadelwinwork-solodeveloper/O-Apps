@@ -80,4 +80,5 @@ export const NOTIFICATION_TYPE_LABEL: Record<string, string> = {
   stok_menipis: "Stok",
   pinjaman: "Pinjaman",
   info: "Info",
+  laporan: "Laporan",
 };

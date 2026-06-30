@@ -24,7 +24,16 @@ const TYPE_LABEL: Record<TemplateType, string> = {
   selesai: "Pesan Selesai",
 };
 
-const VARIABLES = ["{nama}", "{layanan}", "{total}", "{estimasi}", "{sisa}"];
+const VARIABLES = [
+  "{nama}",
+  "{layanan}",
+  "{total}",
+  "{estimasi}",
+  "{sisa}",
+  "{membership}",
+  "{saldo_sisa}",
+  "{kuota_sisa}",
+];
 
 const emptyTemplate: TemplateInput = {
   type: "nota",

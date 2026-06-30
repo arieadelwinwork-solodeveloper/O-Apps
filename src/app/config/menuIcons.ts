@@ -14,6 +14,7 @@ import {
   FileText,
   Printer,
   LayoutGrid,
+  MessageSquareWarning,
 } from "lucide-react";
 
 export const MENU_ICON_MAP: Record<string, LucideIcon> = {
@@ -30,6 +31,7 @@ export const MENU_ICON_MAP: Record<string, LucideIcon> = {
   kas: Wallet,
   template: FileText,
   printer: Printer,
+  laporan: MessageSquareWarning,
 };
 
 export const MENU_HOME_ICON = LayoutGrid;

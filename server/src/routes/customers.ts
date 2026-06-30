@@ -142,7 +142,10 @@ customersRouter.get("/", authMiddleware, async (req: Request, res: Response) => 
     .limit(50);
 
   const q = (req.query.q as string | undefined)?.trim();
-  if (q) query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`);
+  if (q) {
+    const escaped = q.replace(/[%_]/g, "\\$&");
+    query = query.or(`name.ilike.${escaped}%,phone.ilike.${escaped}%`);
+  }
 
   const { data, error } = await query;
   if (error) {

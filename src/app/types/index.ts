@@ -239,7 +239,7 @@ export interface MembershipPackage {
   quota_service_id: string | null;
   is_active: boolean;
   created_at: string;
-  services?: { name: string; unit: string } | null;
+  services?: { name: string; unit: string; price?: number } | null;
 }
 
 export interface Membership {
@@ -261,6 +261,9 @@ export interface MembershipTransaction {
   order_id: string | null;
   change_type: MembershipChangeType;
   amount: number;
+  payment_method?: PaymentMethod | null;
+  proof_url?: string | null;
+  paid_amount?: number | null;
   created_at: string;
 }
 
@@ -308,7 +311,7 @@ export interface CustomerOrderSummary {
 
 // ---------- Fase L: Dashboard Owner ----------
 export type DashboardRange = "today" | "week" | "month";
-export type NotificationType = "stok_menipis" | "pinjaman" | "info";
+export type NotificationType = "stok_menipis" | "pinjaman" | "info" | "laporan";
 
 export interface EmployeePerformance {
   userId: string;
@@ -344,6 +347,22 @@ export interface AppNotification {
   body: string;
   is_read: boolean;
   created_at: string;
+}
+
+export type ReportCategory =
+  | "operasional"
+  | "aplikasi"
+  | "peralatan"
+  | "transaksi"
+  | "lainnya";
+
+export interface OperationalReport {
+  id: string;
+  category: ReportCategory;
+  message: string;
+  created_at: string;
+  reporter_id: string | null;
+  users?: { full_name: string } | null;
 }
 
 // ---------- Fase M: Dashboard Karyawan ----------

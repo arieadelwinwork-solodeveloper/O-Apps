@@ -4,6 +4,7 @@ import type {
   MembershipPackage,
   MembershipTransaction,
   MembershipType,
+  PaymentMethod,
 } from "../types";
 
 export function formatRupiah(n: number): string {
@@ -105,6 +106,25 @@ export async function registerMembership(
   return membership;
 }
 
+export interface CashierRegisterMembershipInput {
+  customerName: string;
+  customerPhone: string;
+  packageId: string;
+  paymentMethod: PaymentMethod;
+  proofUrl?: string;
+}
+
+/** Kasir mendaftarkan membership langsung dari nomor pelanggan. */
+export async function registerMembershipAtCashier(
+  input: CashierRegisterMembershipInput
+): Promise<Membership> {
+  const { membership } = await apiFetch<{ membership: Membership }>(
+    "/api/memberships/cashier-register",
+    { method: "POST", body: JSON.stringify(input) }
+  );
+  return membership;
+}
+
 export async function topupMembership(
   id: string,
   amount: number
@@ -115,11 +135,80 @@ export async function topupMembership(
   });
 }
 
+/** Nilai saldo yang didapat pelanggan, format: Saldo + Rp X */
+export function formatSaldoBenefit(amount: number): string {
+  return `Saldo + ${formatRupiah(amount)}`;
+}
+
+/** Total harga jika beli layanan biasa (kuota × harga layanan). */
+export function kuotaRegularTotal(pkg: MembershipPackage): number | null {
+  if (pkg.type !== "kuota" || !pkg.quota_amount) return null;
+  const unitPrice = pkg.services?.price;
+  if (unitPrice == null || unitPrice <= 0) return null;
+  return pkg.quota_amount * unitPrice;
+}
+
+/** Harga asli yang dicoret (nilai saldo atau total layanan biasa). */
+export function packageOriginalPrice(pkg: MembershipPackage): number | null {
+  if (pkg.type === "saldo") {
+    const saldo = pkg.saldo_amount ?? 0;
+    return saldo > pkg.price ? saldo : null;
+  }
+  const regular = kuotaRegularTotal(pkg);
+  if (regular != null && regular > pkg.price) return regular;
+  return null;
+}
+
+/** Selisih nilai yang didapat vs harga paket. */
+export function computeMembershipSavings(pkg: MembershipPackage): number {
+  if (pkg.type === "saldo") {
+    return Math.max(0, (pkg.saldo_amount ?? 0) - pkg.price);
+  }
+  const regular = kuotaRegularTotal(pkg);
+  if (regular == null) return 0;
+  return Math.max(0, regular - pkg.price);
+}
+
+export function formatMembershipSavings(pkg: MembershipPackage): string | null {
+  const savings = computeMembershipSavings(pkg);
+  if (savings <= 0) return null;
+  return `Pelanggan Hemat ${formatRupiah(savings)}`;
+}
+
 export function describePackage(pkg: MembershipPackage): string {
   if (pkg.type === "saldo") {
-    return `${formatRupiah(pkg.saldo_amount ?? 0)} saldo`;
+    return formatSaldoBenefit(pkg.saldo_amount ?? 0);
   }
   const svc = pkg.services?.name ?? "layanan";
   const unit = pkg.services?.unit ?? "unit";
-  return `${pkg.quota_amount} ${unit} ${svc}`;
+  return `Kuota + ${pkg.quota_amount} ${unit} ${svc}`;
+}
+
+const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  tunai: "Tunai",
+  qris: "QRIS",
+  transfer: "Transfer",
+};
+
+/** Pesan nota WhatsApp setelah pendaftaran membership di kasir. */
+export function defaultMembershipNotaMessage(input: {
+  customerName: string;
+  packageName: string;
+  price: number;
+  benefit: string;
+  savings: string | null;
+  paymentMethod: PaymentMethod;
+  balanceLabel?: string | null;
+}): string {
+  const lines = [
+    `Halo ${input.customerName}, terima kasih telah bergabung membership kami.`,
+    "",
+    `Paket: ${input.packageName}`,
+    `Benefit: ${input.benefit}`,
+    `Total bayar: ${formatRupiah(input.price)} (${PAYMENT_METHOD_LABEL[input.paymentMethod]})`,
+  ];
+  if (input.savings) lines.push(input.savings);
+  if (input.balanceLabel) lines.push(input.balanceLabel);
+  lines.push("", "Membership Anda sudah aktif. Terima kasih!");
+  return lines.join("\n");
 }

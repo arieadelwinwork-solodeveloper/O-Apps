@@ -5,10 +5,14 @@ import { validateBody } from "../middleware/validate.js";
 import { AppError } from "../middleware/errorHandler.js";
 import {
   registerMembershipSchema,
+  cashierRegisterMembershipSchema,
   topupMembershipSchema,
   type RegisterMembershipInput,
+  type CashierRegisterMembershipInput,
   type TopupMembershipInput,
 } from "../schemas/membership.js";
+import { findOrCreateCustomer } from "../lib/customers.js";
+import { registerMembershipFromPackage } from "../lib/membershipRegister.js";
 
 export const membershipsRouter = Router();
 
@@ -59,6 +63,32 @@ membershipsRouter.get("/", authMiddleware, async (req: Request, res: Response) =
   res.json({ memberships: data });
 });
 
+/** POST /api/memberships/cashier-register — kasir berikan membership ke pelanggan. */
+membershipsRouter.post(
+  "/cashier-register",
+  authMiddleware,
+  validateBody(cashierRegisterMembershipSchema),
+  async (req: Request, res: Response) => {
+    const body = res.locals.body as CashierRegisterMembershipInput;
+    const businessId = req.user!.businessId;
+    const customerId = await findOrCreateCustomer(
+      businessId,
+      body.customerName,
+      body.customerPhone
+    );
+    const result = await registerMembershipFromPackage(
+      businessId,
+      customerId,
+      body.packageId,
+      {
+        paymentMethod: body.paymentMethod,
+        proofUrl: body.proofUrl,
+      }
+    );
+    res.status(result.statusCode).json({ membership: result.membership });
+  }
+);
+
 /** GET /api/memberships/:id/transactions — riwayat mutasi. */
 membershipsRouter.get(
   "/:id/transactions",
@@ -95,149 +125,12 @@ membershipsRouter.post(
   async (req: Request, res: Response) => {
     const body = res.locals.body as RegisterMembershipInput;
     const businessId = req.user!.businessId;
-
-    const { data: customer, error: custErr } = await supabaseAdmin
-      .from("customers")
-      .select("id")
-      .eq("id", body.customerId)
-      .eq("business_id", businessId)
-      .maybeSingle();
-    if (custErr || !customer) {
-      throw new AppError(404, "Pelanggan tidak ditemukan");
-    }
-
-    const { data: pkg, error: pkgErr } = await supabaseAdmin
-      .from("membership_packages")
-      .select(
-        "id, type, name, price, saldo_amount, quota_amount, quota_service_id, is_active"
-      )
-      .eq("id", body.packageId)
-      .eq("business_id", businessId)
-      .maybeSingle();
-    if (pkgErr || !pkg) throw new AppError(404, "Paket tidak ditemukan");
-    if (!pkg.is_active) throw new AppError(400, "Paket tidak aktif");
-
-    const creditAmount =
-      pkg.type === "saldo" ? pkg.saldo_amount! : pkg.quota_amount!;
-
-    if (pkg.type === "saldo") {
-      const { data: existing } = await supabaseAdmin
-        .from("memberships")
-        .select("id, balance")
-        .eq("business_id", businessId)
-        .eq("customer_id", body.customerId)
-        .eq("type", "saldo")
-        .maybeSingle();
-
-      if (existing) {
-        const { data: updated, error: updErr } = await supabaseAdmin
-          .from("memberships")
-          .update({
-            balance: existing.balance + creditAmount,
-            package_id: pkg.id,
-          })
-          .eq("id", existing.id)
-          .select(MEMBERSHIP_COLS)
-          .single();
-        if (updErr) {
-          console.error("[MEMBERSHIP TOPUP VIA PACKAGE ERROR]", updErr);
-          throw new AppError(500, "Gagal menambah saldo membership");
-        }
-        await supabaseAdmin.from("membership_transactions").insert({
-          business_id: businessId,
-          membership_id: existing.id,
-          change_type: "topup",
-          amount: creditAmount,
-        });
-        return res.status(200).json({ membership: updated });
-      }
-
-      const { data, error } = await supabaseAdmin
-        .from("memberships")
-        .insert({
-          business_id: businessId,
-          customer_id: body.customerId,
-          type: "saldo",
-          balance: creditAmount,
-          quota_remaining: 0,
-          package_id: pkg.id,
-        })
-        .select(MEMBERSHIP_COLS)
-        .single();
-      if (error) {
-        console.error("[MEMBERSHIP CREATE ERROR]", error);
-        throw new AppError(500, "Gagal mendaftarkan membership");
-      }
-      await supabaseAdmin.from("membership_transactions").insert({
-        business_id: businessId,
-        membership_id: data.id,
-        change_type: "topup",
-        amount: creditAmount,
-      });
-      return res.status(201).json({ membership: data });
-    }
-
-    const { data: existingQuota } = await supabaseAdmin
-      .from("memberships")
-      .select("id, quota_remaining")
-      .eq("business_id", businessId)
-      .eq("customer_id", body.customerId)
-      .eq("type", "kuota")
-      .eq("quota_service_id", pkg.quota_service_id!)
-      .maybeSingle();
-
-    if (existingQuota) {
-      const { data: updated, error: updErr } = await supabaseAdmin
-        .from("memberships")
-        .update({
-          quota_remaining: existingQuota.quota_remaining + creditAmount,
-          package_id: pkg.id,
-        })
-        .eq("id", existingQuota.id)
-        .select(MEMBERSHIP_COLS)
-        .single();
-      if (updErr) {
-        console.error("[MEMBERSHIP QUOTA TOPUP VIA PACKAGE ERROR]", updErr);
-        throw new AppError(500, "Gagal menambah kuota membership");
-      }
-      await supabaseAdmin.from("membership_transactions").insert({
-        business_id: businessId,
-        membership_id: existingQuota.id,
-        change_type: "topup",
-        amount: creditAmount,
-      });
-      return res.status(200).json({ membership: updated });
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from("memberships")
-      .insert({
-        business_id: businessId,
-        customer_id: body.customerId,
-        type: "kuota",
-        balance: 0,
-        quota_service_id: pkg.quota_service_id,
-        quota_remaining: creditAmount,
-        package_id: pkg.id,
-      })
-      .select(MEMBERSHIP_COLS)
-      .single();
-    if (error) {
-      if (error.code === "23505") {
-        throw new AppError(400, "Pelanggan sudah punya kuota untuk layanan ini");
-      }
-      console.error("[MEMBERSHIP CREATE ERROR]", error);
-      throw new AppError(500, "Gagal mendaftarkan membership");
-    }
-
-    await supabaseAdmin.from("membership_transactions").insert({
-      business_id: businessId,
-      membership_id: data.id,
-      change_type: "topup",
-      amount: creditAmount,
-    });
-
-    res.status(201).json({ membership: data });
+    const result = await registerMembershipFromPackage(
+      businessId,
+      body.customerId,
+      body.packageId
+    );
+    res.status(result.statusCode).json({ membership: result.membership });
   }
 );
 

@@ -24,7 +24,7 @@ membershipPackagesRouter.get(
     let query = supabaseAdmin
       .from("membership_packages")
       .select(
-        `${PACKAGE_COLS}, services:quota_service_id(name, unit)`
+        `${PACKAGE_COLS}, services:quota_service_id(name, unit, price)`
       )
       .eq("business_id", businessId)
       .order("created_at", { ascending: false });
@@ -53,11 +53,18 @@ membershipPackagesRouter.post(
     if (body.type === "kuota") {
       const { data: svc, error: svcErr } = await supabaseAdmin
         .from("services")
-        .select("id")
+        .select("id, price")
         .eq("id", body.quotaServiceId)
         .eq("business_id", businessId)
         .maybeSingle();
       if (svcErr || !svc) throw new AppError(400, "Layanan tidak ditemukan");
+      const maxPrice = body.quotaAmount * svc.price;
+      if (body.price > maxPrice) {
+        throw new AppError(
+          400,
+          `Harga paket tidak boleh melebihi harga layanan biasa (${body.quotaAmount} × ${svc.price.toLocaleString("id-ID")} = Rp ${maxPrice.toLocaleString("id-ID")})`
+        );
+      }
     }
 
     const row =

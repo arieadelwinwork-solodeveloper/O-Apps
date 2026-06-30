@@ -22,6 +22,7 @@ import { membershipPackagesRouter } from "./routes/membershipPackages.js";
 import { inventoryRouter } from "./routes/inventory.js";
 import { dashboardRouter } from "./routes/dashboard.js";
 import { notificationsRouter } from "./routes/notifications.js";
+import { reportsRouter } from "./routes/reports.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -87,6 +88,7 @@ app.use("/api/membership-packages", membershipPackagesRouter);
 app.use("/api/inventory", inventoryRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/notifications", notificationsRouter);
+app.use("/api/reports", reportsRouter);
 
 // --- 404 + error handler (terakhir) ---
 app.use(notFoundHandler);

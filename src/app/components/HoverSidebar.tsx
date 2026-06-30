@@ -65,7 +65,7 @@ export function HoverSidebar({
         <button
           type="button"
           onClick={onHome}
-          title="Beranda"
+          title="Menu"
           className={`relative flex w-full items-center rounded-xl py-2.5 px-2 transition-all duration-300 ease-in-out ${
             activeMenu === null ? "bg-[#001F5B]/10 text-[#001F5B]" : "text-slate-600 hover:bg-slate-50"
           }`}
@@ -74,7 +74,7 @@ export function HoverSidebar({
             <HomeIcon className="w-[18px] h-[18px]" strokeWidth={2} />
           </span>
           <span className="ml-1 text-sm font-medium whitespace-nowrap overflow-hidden opacity-0 max-w-0 group-hover/sidebar:opacity-100 group-hover/sidebar:max-w-[11rem] transition-all duration-300 ease-in-out">
-            Beranda
+            Menu
           </span>
         </button>
       </div>

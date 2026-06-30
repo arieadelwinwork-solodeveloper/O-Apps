@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
 import {
@@ -14,19 +14,30 @@ import { formatServiceUnit } from "../lib/serviceUnits";
 import {
   createOrder,
   uploadPaymentProof,
+  listCustomers,
   type CreateOrderInput,
 } from "../lib/orders";
 import { listMemberships } from "../lib/membership";
+import {
+  computeMaxMembershipUsage,
+  hasUsableMembership,
+  buildMembershipReceiptSnapshot,
+  type MembershipReceiptSnapshot,
+} from "../lib/orderMembership";
 import { getBusiness } from "../lib/printDevices";
 import { ensurePrinter, printReceipt } from "../lib/printer";
 import {
   openWhatsApp,
   pickTemplate,
   renderTemplate,
+  defaultNotaMessage,
   waNumber,
 } from "../lib/messages";
 import { inputClass } from "../components/formui";
 import { PaymentProofField } from "../components/order/PaymentProofField";
+import { CashierMembershipRegister } from "../components/order/CashierMembershipRegister";
+import { CustomerFields } from "../components/order/CustomerFields";
+import { MembershipPayPrompt } from "../components/order/MembershipPayPrompt";
 import { WhatsAppIcon } from "../components/icons/WhatsAppIcon";
 import type {
   Service,
@@ -34,6 +45,7 @@ import type {
   PaymentMethod,
   Membership,
   Order,
+  Customer,
 } from "../types";
 
 function rupiah(n: number): string {
@@ -93,6 +105,63 @@ export function OrderView() {
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [saldoToUse, setSaldoToUse] = useState("");
   const [quotaToUse, setQuotaToUse] = useState<Record<string, string>>({});
+  const [membershipPayChoice, setMembershipPayChoice] = useState<
+    "yes" | "no" | null
+  >(null);
+  const [showMembershipPrompt, setShowMembershipPrompt] = useState(false);
+  const [membershipReceipt, setMembershipReceipt] =
+    useState<MembershipReceiptSnapshot | null>(null);
+  const [customerDirectory, setCustomerDirectory] = useState<Customer[]>([]);
+  const [membershipRegisterMode, setMembershipRegisterMode] = useState(false);
+  const [scrollCashierToTop, setScrollCashierToTop] = useState(false);
+  const cashierTopRef = useRef<HTMLDivElement>(null);
+
+  function openMembershipRegister() {
+    setCart({});
+    setMembershipPayChoice(null);
+    setSaldoToUse("");
+    setQuotaToUse({});
+    setShowMembershipPrompt(false);
+    setMembershipRegisterMode(true);
+  }
+
+  function closeMembershipRegister() {
+    setMembershipRegisterMode(false);
+  }
+
+  function returnToCashierAfterMembership() {
+    setMembershipRegisterMode(false);
+    setCustomerName("");
+    setCustomerPhone("");
+    setMemberships([]);
+    setSaldoToUse("");
+    setQuotaToUse({});
+    setMembershipPayChoice(null);
+    setShowMembershipPrompt(false);
+    setScrollCashierToTop(true);
+  }
+
+  useEffect(() => {
+    if (!scrollCashierToTop || membershipRegisterMode) return;
+    setScrollCashierToTop(false);
+    requestAnimationFrame(() => {
+      cashierTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [scrollCashierToTop, membershipRegisterMode]);
+
+  async function reloadMemberships() {
+    const phone = customerPhone.trim();
+    if (phone.length < 8) {
+      setMemberships([]);
+      return;
+    }
+    try {
+      const list = await listMemberships({ phone });
+      setMemberships(list);
+    } catch {
+      setMemberships([]);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -105,6 +174,9 @@ export function OrderView() {
         setLoading(false);
       }
     })();
+    listCustomers()
+      .then(setCustomerDirectory)
+      .catch(() => setCustomerDirectory([]));
   }, []);
 
   useEffect(() => {
@@ -113,17 +185,15 @@ export function OrderView() {
       setMemberships([]);
       setSaldoToUse("");
       setQuotaToUse({});
+      setMembershipPayChoice(null);
+      setShowMembershipPrompt(false);
       return;
     }
     const t = setTimeout(async () => {
-      try {
-        const list = await listMemberships({ phone });
-        setMemberships(list);
-        setSaldoToUse("");
-        setQuotaToUse({});
-      } catch {
-        setMemberships([]);
-      }
+      setMembershipPayChoice(null);
+      setSaldoToUse("");
+      setQuotaToUse({});
+      await reloadMemberships();
     }, 400);
     return () => clearTimeout(t);
   }, [customerPhone]);
@@ -180,7 +250,67 @@ export function OrderView() {
     (m) => m.quota_service_id && (cart[m.quota_service_id] ?? 0) > 0
   );
 
+  useEffect(() => {
+    if (
+      membershipRegisterMode ||
+      itemCount === 0 ||
+      !hasUsableMembership(memberships, cart)
+    ) {
+      setShowMembershipPrompt(false);
+      return;
+    }
+    if (membershipPayChoice === null) {
+      setShowMembershipPrompt(true);
+    }
+  }, [memberships, cart, itemCount, membershipPayChoice, membershipRegisterMode]);
+
+  function applyMembershipPayment() {
+    const { saldoAmount, quotaByMembershipId } = computeMaxMembershipUsage(
+      memberships,
+      cart,
+      services
+    );
+    setSaldoToUse(saldoAmount > 0 ? String(saldoAmount) : "");
+    const quotaStrings: Record<string, string> = {};
+    for (const [id, qty] of Object.entries(quotaByMembershipId)) {
+      if (qty > 0) quotaStrings[id] = String(qty);
+    }
+    setQuotaToUse(quotaStrings);
+    setMembershipPayChoice("yes");
+    setShowMembershipPrompt(false);
+  }
+
+  function declineMembershipPayment() {
+    setSaldoToUse("");
+    setQuotaToUse({});
+    setMembershipPayChoice("no");
+    setShowMembershipPrompt(false);
+  }
+
+  useEffect(() => {
+    if (membershipPayChoice !== "yes" || itemCount === 0) return;
+    const { saldoAmount, quotaByMembershipId } = computeMaxMembershipUsage(
+      memberships,
+      cart,
+      services
+    );
+    setSaldoToUse(saldoAmount > 0 ? String(saldoAmount) : "");
+    const quotaStrings: Record<string, string> = {};
+    for (const [id, qty] of Object.entries(quotaByMembershipId)) {
+      if (qty > 0) quotaStrings[id] = String(qty);
+    }
+    setQuotaToUse(quotaStrings);
+  }, [cart, memberships, services, membershipPayChoice, itemCount]);
+
+  function selectCustomer(customer: Customer) {
+    setCustomerName(customer.name);
+    setCustomerPhone(customer.phone ?? "");
+  }
+
   function setQty(serviceId: string, qty: number) {
+    if (qty > 0 && membershipRegisterMode) {
+      closeMembershipRegister();
+    }
     setCart((prev) => {
       const next = { ...prev };
       if (qty <= 0) delete next[serviceId];
@@ -252,6 +382,16 @@ export function OrderView() {
         }))
         .filter((u) => u.qty > 0);
 
+      const quotaById = Object.fromEntries(
+        quotaUsages.map((u) => [u.membershipId, u.qty])
+      );
+      const receiptSnap = buildMembershipReceiptSnapshot(
+        memberships,
+        services,
+        saldoMembershipAmount,
+        quotaById
+      );
+
       const payload: CreateOrderInput = {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
@@ -272,6 +412,7 @@ export function OrderView() {
         ...(quotaUsages.length > 0 ? { membershipQuotaUsages: quotaUsages } : {}),
       };
       const order = await createOrder(payload);
+      setMembershipReceipt(receiptSnap);
       setSuccessOrder(order);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal membuat transaksi");
@@ -292,6 +433,10 @@ export function OrderView() {
     setMemberships([]);
     setSaldoToUse("");
     setQuotaToUse({});
+    setMembershipPayChoice(null);
+    setShowMembershipPrompt(false);
+    setMembershipReceipt(null);
+    setMembershipRegisterMode(false);
     setSuccessOrder(null);
     setSuccessError(null);
   }
@@ -325,9 +470,10 @@ export function OrderView() {
     try {
       const templates = await listTemplates().catch(() => []);
       const tpl = pickTemplate(templates, "nota");
+      const extras = { membership: membershipReceipt };
       const body = tpl
-        ? renderTemplate(tpl.body, successOrder)
-        : `Halo ${successOrder.customers?.name ?? ""}, terima kasih atas pesanan Anda.\n\nNota: ${successOrder.order_no}\nTotal: ${rupiah(successOrder.total)}`;
+        ? renderTemplate(tpl.body, successOrder, extras)
+        : defaultNotaMessage(successOrder, extras);
       openWhatsApp(phone, body);
     } catch (e) {
       setSuccessError(
@@ -423,35 +569,55 @@ export function OrderView() {
   }
 
   return (
-    <div className="p-4 pb-40">
+    <div
+      ref={cashierTopRef}
+      className={`p-4 ${membershipRegisterMode ? "pb-8" : "pb-40"}`}
+    >
+      <MembershipPayPrompt
+        open={showMembershipPrompt}
+        customerName={customerName}
+        onAccept={applyMembershipPayment}
+        onDecline={declineMembershipPayment}
+      />
+
       {error && (
         <div className="mb-4 bg-red-50 text-red-600 text-sm rounded-xl px-4 py-3">
           {error}
         </div>
       )}
 
-      {/* Pelanggan */}
-      <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03] mb-4">
-        <h2 className="text-sm font-semibold text-slate-800 mb-4">Data Pelanggan</h2>
-        <div className="space-y-3">
-          <input
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="Nama pelanggan"
-            className={inputClass}
+      {/* Pelanggan + membership */}
+      <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03] mb-4 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-800 mb-4">
+            Data Pelanggan
+          </h2>
+          <CustomerFields
+            name={customerName}
+            phone={customerPhone}
+            customers={customerDirectory}
+            onNameChange={setCustomerName}
+            onPhoneChange={setCustomerPhone}
+            onSelectCustomer={selectCustomer}
           />
-          <input
-            value={customerPhone}
-            onChange={(e) => setCustomerPhone(e.target.value)}
-            placeholder="No. WhatsApp"
-            inputMode="tel"
-            required
-            className={inputClass}
+        </div>
+
+        <div className="border-t border-dashed border-slate-100 pt-4">
+          <CashierMembershipRegister
+            customerName={customerName}
+            customerPhone={customerPhone}
+            phoneValid={isPhoneValid(customerPhone)}
+            expanded={membershipRegisterMode}
+            onExpand={openMembershipRegister}
+            onCollapse={closeMembershipRegister}
+            onRegistered={reloadMemberships}
+            onNewTransaction={returnToCashierAfterMembership}
           />
         </div>
       </div>
 
-      {/* Layanan */}
+      {/* Layanan — disembunyikan saat mode membership */}
+      {!membershipRegisterMode && (
       <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03] mb-4">
         <h2 className="text-sm font-semibold text-slate-800 mb-4">Pilih Layanan</h2>
         <div className="space-y-2.5">
@@ -511,12 +677,13 @@ export function OrderView() {
           })}
         </div>
       </div>
+      )}
 
-      {/* Membership */}
-      {memberships.length > 0 && itemCount > 0 && (
-        <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-amber-100">
+      {/* Pembayaran membership (pakai saldo/kuota) — hanya mode layanan */}
+      {!membershipRegisterMode && memberships.length > 0 && itemCount > 0 && membershipPayChoice === "yes" && (
+        <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-amber-100 mb-4">
           <h2 className="text-sm font-semibold text-slate-800 mb-3">
-            Membership
+            Pembayaran Membership
           </h2>
           {saldoMembership && (
             <div className="mb-3">
@@ -563,10 +730,22 @@ export function OrderView() {
               Potongan membership: − {rupiah(membershipDiscount)}
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              setMembershipPayChoice(null);
+              setSaldoToUse("");
+              setQuotaToUse({});
+            }}
+            className="text-[11px] text-slate-500 mt-2 underline"
+          >
+            Ubah pilihan membership
+          </button>
         </div>
       )}
 
       {/* Keterangan */}
+      {!membershipRegisterMode && (
       <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03] mb-4">
         <h2 className="text-sm font-semibold text-slate-800 mb-3">Keterangan</h2>
         <textarea
@@ -578,8 +757,10 @@ export function OrderView() {
           className={`${inputClass} resize-none min-h-[88px]`}
         />
       </div>
+      )}
 
       {/* Pembayaran */}
+      {!membershipRegisterMode && (
       <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03]">
         <h2 className="text-sm font-semibold text-slate-800 mb-4">Pembayaran</h2>
 
@@ -647,8 +828,10 @@ export function OrderView() {
           </div>
         )}
       </div>
+      )}
 
-      {/* Bar total + submit */}
+      {/* Bar total + submit — hanya mode layanan */}
+      {!membershipRegisterMode && (
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-black/5 max-w-md mx-auto">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-slate-500">
@@ -680,6 +863,7 @@ export function OrderView() {
           Buat Pesanan
         </motion.button>
       </div>
+      )}
     </div>
   );
 }

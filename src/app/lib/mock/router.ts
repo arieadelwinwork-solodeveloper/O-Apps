@@ -192,6 +192,25 @@ function createOrderFromInput(input: MockCreateOrderInput): Order {
   s.orderItems[orderId] = items;
   if (stages.length) s.orderStages[orderId] = stages;
   s.orders.unshift(order);
+
+  if (input.membershipSaldoAmount && input.membershipSaldoAmount > 0) {
+    const saldoMem = s.memberships.find(
+      (m) => m.customer_id === customer.id && m.type === "saldo"
+    );
+    if (saldoMem) {
+      saldoMem.balance = Math.max(
+        0,
+        saldoMem.balance - input.membershipSaldoAmount
+      );
+    }
+  }
+  for (const u of input.membershipQuotaUsages ?? []) {
+    const mem = s.memberships.find((x) => x.id === u.membershipId);
+    if (mem) {
+      mem.quota_remaining = Math.max(0, mem.quota_remaining - u.qty);
+    }
+  }
+
   return order;
 }
 
@@ -347,14 +366,27 @@ export async function mockApiFetch<T>(
 
   // --- Customers ---
   if (pathname === "/api/customers" && method === "GET") {
-    return {
-      customers: s.customers.map((c) => ({
-        id: c.id,
-        name: c.name,
-        phone: c.phone,
-        created_at: c.member_since,
-      })),
-    } as T;
+    let list = s.customers.map((c) => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      created_at: c.member_since,
+    }));
+    const q = params.get("q")?.trim();
+    if (q) {
+      const qLower = q.toLowerCase();
+      const qDigits = q.replace(/\D/g, "");
+      list = list.filter((c) => {
+        if (c.name.toLowerCase().startsWith(qLower)) return true;
+        if (!c.phone) return false;
+        if (c.phone.startsWith(q)) return true;
+        if (qDigits && c.phone.replace(/\D/g, "").startsWith(qDigits)) {
+          return true;
+        }
+        return false;
+      });
+    }
+    return { customers: list } as T;
   }
   if (pathname === "/api/customers/stats" && method === "GET") {
     let list = [...s.customers];
@@ -405,6 +437,15 @@ export async function mockApiFetch<T>(
       input.type === "kuota" && input.quotaServiceId
         ? s.services.find((x) => x.id === input.quotaServiceId)
         : null;
+    if (input.type === "kuota") {
+      if (!svc) throw new Error("Layanan tidak ditemukan");
+      const maxPrice = (input.quotaAmount ?? 0) * svc.price;
+      if (input.price > maxPrice) {
+        throw new Error(
+          `Harga paket tidak boleh melebihi harga layanan biasa (maks. Rp ${maxPrice.toLocaleString("id-ID")})`
+        );
+      }
+    }
     const pkg = {
       id: uid("pkg"),
       type: input.type,
@@ -418,7 +459,7 @@ export async function mockApiFetch<T>(
       created_at: new Date().toISOString(),
       services:
         svc && input.type === "kuota"
-          ? { name: svc.name, unit: svc.unit }
+          ? { name: svc.name, unit: svc.unit, price: svc.price }
           : null,
     };
     s.membershipPackages.unshift(pkg);
@@ -433,6 +474,95 @@ export async function mockApiFetch<T>(
   }
 
   // --- Memberships ---
+  if (pathname === "/api/memberships/cashier-register" && method === "POST") {
+    const input = body<{
+      customerName: string;
+      customerPhone: string;
+      packageId: string;
+      paymentMethod: "tunai" | "qris" | "transfer";
+      proofUrl?: string;
+    }>(options);
+    if (
+      (input.paymentMethod === "qris" || input.paymentMethod === "transfer") &&
+      !input.proofUrl
+    ) {
+      throw new Error("Bukti bayar wajib untuk QRIS/Transfer");
+    }
+    let cust = s.customers.find((c) => c.phone === input.customerPhone);
+    if (!cust) {
+      cust = {
+        id: uid("cust"),
+        name: input.customerName,
+        phone: input.customerPhone,
+        member_since: new Date().toISOString(),
+        total_transaksi: 0,
+        omset_total: 0,
+        transaksi_terakhir: null,
+      };
+      s.customers.unshift(cust);
+    } else if (input.customerName.trim()) {
+      cust.name = input.customerName.trim();
+    }
+    const pkg = s.membershipPackages.find((p) => p.id === input.packageId);
+    if (!pkg || !pkg.is_active) throw new Error("Paket tidak ditemukan");
+    const credit =
+      pkg.type === "saldo" ? (pkg.saldo_amount ?? 0) : (pkg.quota_amount ?? 0);
+
+    if (pkg.type === "saldo") {
+      const existing = s.memberships.find(
+        (m) => m.customer_id === cust!.id && m.type === "saldo"
+      );
+      if (existing) {
+        existing.balance += credit;
+        existing.package_id = pkg.id;
+        existing.membership_packages = { name: pkg.name, price: pkg.price };
+        return { membership: existing } as T;
+      }
+      const membership = {
+        id: uid("mem"),
+        customer_id: cust.id,
+        type: "saldo" as const,
+        balance: credit,
+        quota_service_id: null,
+        quota_remaining: 0,
+        package_id: pkg.id,
+        created_at: new Date().toISOString(),
+        customers: { name: cust.name, phone: cust.phone },
+        membership_packages: { name: pkg.name, price: pkg.price },
+      };
+      s.memberships.push(membership);
+      return { membership } as T;
+    }
+
+    const existingQ = s.memberships.find(
+      (m) =>
+        m.customer_id === cust!.id &&
+        m.type === "kuota" &&
+        m.quota_service_id === pkg.quota_service_id
+    );
+    if (existingQ) {
+      existingQ.quota_remaining += credit;
+      existingQ.package_id = pkg.id;
+      existingQ.membership_packages = { name: pkg.name, price: pkg.price };
+      return { membership: existingQ } as T;
+    }
+    const svc = s.services.find((x) => x.id === pkg.quota_service_id);
+    const membership = {
+      id: uid("mem"),
+      customer_id: cust.id,
+      type: "kuota" as const,
+      balance: 0,
+      quota_service_id: pkg.quota_service_id ?? null,
+      quota_remaining: credit,
+      package_id: pkg.id,
+      created_at: new Date().toISOString(),
+      customers: { name: cust.name, phone: cust.phone },
+      services: svc ? { name: svc.name, unit: svc.unit } : null,
+      membership_packages: { name: pkg.name, price: pkg.price },
+    };
+    s.memberships.push(membership);
+    return { membership } as T;
+  }
   if (pathname === "/api/memberships" && method === "GET") {
     const phone = params.get("phone");
     const customerId = params.get("customerId");
@@ -685,6 +815,50 @@ export async function mockApiFetch<T>(
         };
       }),
     } as T;
+  }
+
+  // --- Reports ---
+  if (pathname === "/api/reports" && method === "GET") {
+    return { reports: s.reports } as T;
+  }
+  const reportGet = pathname.match(/^\/api\/reports\/([^/]+)$/);
+  if (reportGet && method === "GET") {
+    const report = s.reports.find((r) => r.id === reportGet[1]);
+    if (!report) throw new Error("Laporan tidak ditemukan");
+    return { report } as T;
+  }
+  if (pathname === "/api/reports" && method === "POST") {
+    const input = body<{ category: string; message: string }>(options);
+    const id = uid("rep");
+    const report = {
+      id,
+      category: input.category as import("../../types").ReportCategory,
+      message: input.message,
+      created_at: new Date().toISOString(),
+      reporter_id: IDS.karyawan,
+      users: { full_name: "Siti Kasir" },
+    };
+    s.reports.unshift(report);
+    const catLabels: Record<string, string> = {
+      operasional: "Masalah Operasional",
+      aplikasi: "Masalah Aplikasi",
+      peralatan: "Peralatan / Mesin",
+      transaksi: "Transaksi / Kasir",
+      lainnya: "Lainnya",
+    };
+    const preview =
+      input.message.length > 120
+        ? `${input.message.slice(0, 117)}…`
+        : input.message;
+    s.notifications.unshift({
+      id: uid("notif"),
+      type: "laporan",
+      title: `Laporan: ${catLabels[input.category] ?? input.category}`,
+      body: `Siti Kasir: ${preview} report_id:${id}`,
+      is_read: false,
+      created_at: new Date().toISOString(),
+    });
+    return { report } as T;
   }
 
   // --- Notifications ---

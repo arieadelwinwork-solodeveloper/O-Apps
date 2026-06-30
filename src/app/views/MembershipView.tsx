@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Loader2, Plus, Crown, RefreshCw, Package } from "lucide-react";
+import { Loader2, Plus, Crown, RefreshCw } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { inputClass, Field } from "../components/formui";
 import { listCustomers } from "../lib/orders";
@@ -14,10 +14,13 @@ import {
   topupMembership,
   formatRupiah,
   describePackage,
+  formatMembershipSavings,
   MEMBERSHIP_TYPE_LABEL,
   CHANGE_TYPE_LABEL,
   listMembershipTransactions,
 } from "../lib/membership";
+import { MembershipPackageCard } from "../components/membership/MembershipPackageCard";
+import { assignMembershipTiersByType } from "../lib/membershipTier";
 import type {
   Membership,
   MembershipPackage,
@@ -64,6 +67,34 @@ export function MembershipView() {
 
   const activePackages = useMemo(
     () => packages.filter((p) => p.is_active),
+    [packages]
+  );
+
+  const selectedKuotaService = useMemo(
+    () => services.find((s) => s.id === pkgServiceId),
+    [services, pkgServiceId]
+  );
+
+  const kuotaAmount = Number(pkgQuota) || 0;
+  const kuotaMaxPrice =
+    pkgType === "kuota" && selectedKuotaService && kuotaAmount > 0
+      ? kuotaAmount * selectedKuotaService.price
+      : 0;
+
+  const packageFormSavings = useMemo(() => {
+    const price = Number(pkgPrice) || 0;
+    if (pkgType === "saldo") {
+      const saldo = Number(pkgSaldo) || 0;
+      return saldo > price ? saldo - price : 0;
+    }
+    if (kuotaMaxPrice > 0 && price > 0 && kuotaMaxPrice > price) {
+      return kuotaMaxPrice - price;
+    }
+    return 0;
+  }, [pkgType, pkgSaldo, pkgPrice, kuotaMaxPrice]);
+
+  const packageTierMap = useMemo(
+    () => assignMembershipTiersByType(packages),
     [packages]
   );
 
@@ -165,7 +196,20 @@ export function MembershipView() {
       } else {
         const quota = Number(pkgQuota) || 0;
         if (!pkgServiceId || quota <= 0) {
-          setError("Layanan dan kuota wajib diisi");
+          setError("Pilih layanan dan isi jumlah kuota");
+          setBusy(false);
+          return;
+        }
+        if (!selectedKuotaService) {
+          setError("Layanan tidak ditemukan");
+          setBusy(false);
+          return;
+        }
+        const maxPrice = quota * selectedKuotaService.price;
+        if (price > maxPrice) {
+          setError(
+            `Harga paket tidak boleh melebihi harga layanan biasa (maks. ${formatRupiah(maxPrice)})`
+          );
           setBusy(false);
           return;
         }
@@ -397,43 +441,38 @@ export function MembershipView() {
             </p>
           ) : (
             <div className="space-y-3">
-              {packages.map((pkg) => (
+              {[...packages]
+                .sort((a, b) => a.price - b.price)
+                .map((pkg) => {
+                const tier = packageTierMap.get(pkg.id) ?? "silver";
+                return (
                 <div
                   key={pkg.id}
-                  className={`bg-white rounded-[20px] p-4 shadow-sm border ${
-                    pkg.is_active
-                      ? "border-black/[0.03]"
-                      : "border-slate-200 opacity-60"
-                  }`}
+                  className={pkg.is_active ? "" : "opacity-60"}
                 >
-                  <div className="flex justify-between items-start gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
-                        <Package className="w-3.5 h-3.5 text-[#001F5B]" />
-                        {pkg.name}
-                      </div>
-                      <div className="text-xs text-slate-400 mt-0.5">
-                        {MEMBERSHIP_TYPE_LABEL[pkg.type]} · {describePackage(pkg)}
-                      </div>
-                      <div className="text-xs font-medium text-[#001F5B] mt-1">
-                        Harga {formatRupiah(pkg.price)}
-                      </div>
+                  <MembershipPackageCard
+                    pkg={pkg}
+                    tier={tier}
+                    as="div"
+                  >
+                    <div className="flex justify-end mt-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => togglePackageActive(pkg)}
+                        className={`text-[10px] font-medium px-2 py-1 rounded-full shrink-0 ${
+                          pkg.is_active
+                            ? "bg-emerald-500/90 text-white"
+                            : "bg-black/30 text-white/80"
+                        }`}
+                      >
+                        {pkg.is_active ? "Aktif" : "Nonaktif"}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => togglePackageActive(pkg)}
-                      className={`text-[10px] font-medium px-2 py-1 rounded-full shrink-0 ${
-                        pkg.is_active
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-slate-100 text-slate-500"
-                      }`}
-                    >
-                      {pkg.is_active ? "Aktif" : "Nonaktif"}
-                    </button>
-                  </div>
+                  </MembershipPackageCard>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
@@ -534,37 +573,32 @@ export function MembershipView() {
                   className={inputClass}
                 />
               </Field>
-              <Field label="Harga paket">
+              <Field label="Harga paket membership">
                 <input
                   value={pkgPrice}
                   onChange={(e) => setPkgPrice(e.target.value)}
-                  placeholder="Harga jual (Rp)"
+                  placeholder={
+                    pkgType === "kuota" && kuotaMaxPrice > 0
+                      ? `Maks. ${kuotaMaxPrice.toLocaleString("id-ID")}`
+                      : "Harga jual (Rp)"
+                  }
                   inputMode="numeric"
                   className={inputClass}
                 />
               </Field>
               {pkgType === "saldo" ? (
-                <Field label="Saldo">
+                <Field label="Saldo yang didapat">
                   <input
                     value={pkgSaldo}
                     onChange={(e) => setPkgSaldo(e.target.value)}
-                    placeholder="Saldo yang didapat pelanggan (Rp)"
+                    placeholder="Contoh: 120000"
                     inputMode="numeric"
                     className={inputClass}
                   />
                 </Field>
               ) : (
                 <>
-                  <Field label="Kuota layanan">
-                    <input
-                      value={pkgQuota}
-                      onChange={(e) => setPkgQuota(e.target.value)}
-                      placeholder="Jumlah kuota"
-                      inputMode="numeric"
-                      className={inputClass}
-                    />
-                  </Field>
-                  <Field label="Layanan">
+                  <Field label="Layanan yang di-kuotakan">
                     <select
                       value={pkgServiceId}
                       onChange={(e) => setPkgServiceId(e.target.value)}
@@ -573,12 +607,42 @@ export function MembershipView() {
                       <option value="">Pilih layanan</option>
                       {services.map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.name} ({s.unit})
+                          {s.name} — {formatRupiah(s.price)}/{s.unit}
                         </option>
                       ))}
                     </select>
                   </Field>
+                  <Field label="Jumlah kuota">
+                    <input
+                      value={pkgQuota}
+                      onChange={(e) => setPkgQuota(e.target.value)}
+                      placeholder={
+                        selectedKuotaService
+                          ? `Contoh: 10 ${selectedKuotaService.unit}`
+                          : "Jumlah kuota"
+                      }
+                      inputMode="numeric"
+                      className={inputClass}
+                    />
+                  </Field>
+                  {kuotaMaxPrice > 0 && (
+                    <p className="text-xs text-slate-500 bg-slate-50 rounded-xl px-3 py-2.5 leading-relaxed">
+                      Harga maksimum paket:{" "}
+                      <strong>{formatRupiah(kuotaMaxPrice)}</strong>
+                      <br />
+                      <span className="text-slate-400">
+                        {kuotaAmount} × {formatRupiah(selectedKuotaService!.price)}{" "}
+                        harga layanan biasa — harga membership tidak boleh di
+                        atas nilai ini.
+                      </span>
+                    </p>
+                  )}
                 </>
+              )}
+              {packageFormSavings > 0 && (
+                <p className="text-xs font-semibold text-emerald-600 bg-emerald-50 rounded-xl px-3 py-2">
+                  Pelanggan Hemat {formatRupiah(packageFormSavings)}
+                </p>
               )}
               <button
                 type="button"

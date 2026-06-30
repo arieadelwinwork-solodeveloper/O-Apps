@@ -1,0 +1,81 @@
+/* Teks metalik — silver (Saldo+/Kuota+) */
+.membership-metallic-silver {
+  background: linear-gradient(
+    180deg,
+    #f8fafc 0%,
+    #d4dce8 38%,
+    #9aacbe 72%,
+    #6b7a8f 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Cahaya — hanya saldo & harga */
+.membership-saldo-light {
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.22))
+    drop-shadow(0 0 2px rgba(255, 255, 255, 0.18))
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+
+.membership-price-light {
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 2px rgba(255, 255, 255, 0.18);
+}
+
+@keyframes membership-saldo-light-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.22))
+      drop-shadow(0 0 2px rgba(255, 255, 255, 0.18))
+      drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.32))
+      drop-shadow(0 0 3px rgba(255, 255, 255, 0.28))
+      drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+  }
+}
+
+@keyframes membership-price-light-pulse {
+  0%,
+  100% {
+    text-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.22),
+      0 0 2px rgba(255, 255, 255, 0.18);
+  }
+  50% {
+    text-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.32),
+      0 0 3px rgba(255, 255, 255, 0.28);
+  }
+}
+
+.membership-card-copy.is-selected .membership-saldo-light {
+  animation: membership-saldo-light-pulse 2.8s ease-in-out infinite;
+}
+
+.membership-card-copy.is-selected .membership-price-light {
+  animation: membership-price-light-pulse 2.8s ease-in-out infinite;
+}
+
+/* Harga coret — hitam abu */
+.membership-price-muted {
+  color: #4b5563;
+}
+
+/* Harga membership — hitam tebal */
+.membership-price-black {
+  color: #000000;
+  font-weight: 700;
+}
+
+/* Aksesibilitas */
+@media (prefers-reduced-motion: reduce) {
+  .membership-card-copy.is-selected .membership-saldo-light,
+  .membership-card-copy.is-selected .membership-price-light {
+    animation: none;
+  }
+}

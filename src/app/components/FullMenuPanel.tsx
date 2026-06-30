@@ -88,7 +88,7 @@ export function FullMenuPanel({
         <div>
           <h2 className="text-base font-semibold text-[#001F5B]">Menu</h2>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Geser ke kiri untuk kembali ke Beranda
+            Geser ke kiri untuk kembali ke Menu
           </p>
         </div>
         <button

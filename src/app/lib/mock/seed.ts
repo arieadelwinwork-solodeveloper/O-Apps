@@ -17,6 +17,7 @@ import type {
   Payroll,
   Commission,
   AppNotification,
+  OperationalReport,
   PrintDevice,
   Business,
 } from "../../types";
@@ -112,7 +113,7 @@ export function createSeedData() {
       id: IDS.templateNota,
       type: "nota",
       name: "Nota Standar",
-      body: "Halo {nama}, pesanan {layanan} total {total}. Estimasi selesai {estimasi}.",
+      body: "Halo {nama}, pesanan {layanan} total {total}. Estimasi selesai {estimasi}.\n\n{membership}",
       is_default: true,
       created_at: iso(daysAgo(60)),
     },
@@ -273,6 +274,17 @@ export function createSeedData() {
 
   const membershipPackages: MembershipPackage[] = [
     {
+      id: IDS.pkgSaldoBronze,
+      type: "saldo",
+      name: "Paket Bronze",
+      price: 50_000,
+      saldo_amount: 55_000,
+      quota_amount: null,
+      quota_service_id: null,
+      is_active: true,
+      created_at: iso(daysAgo(60)),
+    },
+    {
       id: IDS.pkgSaldoSilver,
       type: "saldo",
       name: "Paket Silver",
@@ -304,7 +316,7 @@ export function createSeedData() {
       quota_service_id: IDS.svcCuci,
       is_active: true,
       created_at: iso(daysAgo(45)),
-      services: { name: "Cuci Kiloan", unit: "kg" },
+      services: { name: "Cuci Kiloan", unit: "kg", price: 8000 },
     },
   ];
 
@@ -556,12 +568,32 @@ export function createSeedData() {
       created_at: iso(daysAgo(2)),
     },
     {
+      id: "notif-lap",
+      type: "laporan",
+      title: "Laporan: Masalah Aplikasi",
+      body: "Siti Kasir: Layar transaksi kadang freeze saat puncak. report_id:rep-demo-001",
+      is_read: false,
+      created_at: iso(daysAgo(1)),
+    },
+    {
       id: "notif-003",
       type: "info",
       title: "Selamat datang di O'Apps",
       body: "Mode demo — data simulasi untuk preview UI.",
       is_read: true,
       created_at: iso(daysAgo(3)),
+    },
+  ];
+
+  const reports: OperationalReport[] = [
+    {
+      id: "rep-demo-001",
+      category: "aplikasi",
+      message:
+        "Layar transaksi kadang freeze saat jam sibuk. Perlu refresh manual.",
+      created_at: iso(daysAgo(1)),
+      reporter_id: IDS.karyawan,
+      users: { full_name: "Siti Kasir" },
     },
   ];
 
@@ -606,6 +638,7 @@ export function createSeedData() {
     payrolls,
     commissions,
     notifications,
+    reports,
     printDevices,
     business,
     orderCounter: 4,

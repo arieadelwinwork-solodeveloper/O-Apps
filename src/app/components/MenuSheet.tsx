@@ -57,6 +57,11 @@ const MENU_VIEWS: Record<string, React.LazyExoticComponent<ComponentType>> = {
       default: m.MembershipView,
     }))
   ),
+  laporan: lazy(() =>
+    import("../views/ReportsView").then((m) => ({
+      default: m.ReportsView,
+    }))
+  ),
 };
 
 function MenuLoading() {

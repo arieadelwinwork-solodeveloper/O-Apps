@@ -10,7 +10,11 @@ export type OwnerMenuCategory =
   | "pengaturan";
 
 /** Kategori menu dashboard karyawan */
-export type KaryawanMenuCategory = "operasional";
+export type KaryawanMenuCategory =
+  | "layanan"
+  | "keuangan"
+  | "personalia"
+  | "pengaturan";
 
 export type MenuCategory = OwnerMenuCategory | KaryawanMenuCategory;
 
@@ -31,7 +35,7 @@ export const MENU_ITEMS: MenuItem[] = [
     desc: "Buat transaksi baru",
     roles: ["owner", "karyawan"],
     ownerCategory: "pelayanan",
-    karyawanCategory: "operasional",
+    karyawanCategory: "layanan",
   },
   {
     id: "transaksi",
@@ -39,7 +43,7 @@ export const MENU_ITEMS: MenuItem[] = [
     desc: "Lacak status pengerjaan",
     roles: ["owner", "karyawan"],
     ownerCategory: "pelayanan",
-    karyawanCategory: "operasional",
+    karyawanCategory: "layanan",
   },
   {
     id: "membership",
@@ -62,7 +66,7 @@ export const MENU_ITEMS: MenuItem[] = [
     desc: "CRM & riwayat",
     roles: ["owner", "karyawan"],
     ownerCategory: "crm",
-    karyawanCategory: "operasional",
+    karyawanCategory: "layanan",
   },
   // —— Manajemen SDM ——
   {
@@ -71,7 +75,7 @@ export const MENU_ITEMS: MenuItem[] = [
     desc: "Absen masuk & pulang",
     roles: ["owner", "karyawan"],
     ownerCategory: "manajemen_sdm",
-    karyawanCategory: "operasional",
+    karyawanCategory: "personalia",
   },
   {
     id: "penggajian",
@@ -79,7 +83,7 @@ export const MENU_ITEMS: MenuItem[] = [
     desc: "Slip & pinjaman",
     roles: ["karyawan"],
     ownerCategory: "manajemen_sdm",
-    karyawanCategory: "operasional",
+    karyawanCategory: "personalia",
   },
   // —— Manajemen Perlengkapan / Peralatan ——
   {
@@ -88,7 +92,7 @@ export const MENU_ITEMS: MenuItem[] = [
     desc: "Stok & restock",
     roles: ["owner", "karyawan"],
     ownerCategory: "manajemen_perlengkapan",
-    karyawanCategory: "operasional",
+    karyawanCategory: "keuangan",
   },
   // —— Keuangan ——
   {
@@ -104,7 +108,7 @@ export const MENU_ITEMS: MenuItem[] = [
     desc: "Catat beban harian",
     roles: ["owner", "karyawan"],
     ownerCategory: "keuangan",
-    karyawanCategory: "operasional",
+    karyawanCategory: "keuangan",
   },
   {
     id: "kas",
@@ -112,7 +116,7 @@ export const MENU_ITEMS: MenuItem[] = [
     desc: "Buka/tutup & prediksi",
     roles: ["owner", "karyawan"],
     ownerCategory: "keuangan",
-    karyawanCategory: "operasional",
+    karyawanCategory: "keuangan",
   },
   // —— Pengaturan ——
   {
@@ -128,7 +132,15 @@ export const MENU_ITEMS: MenuItem[] = [
     desc: "Pasangkan printer nota",
     roles: ["owner", "karyawan"],
     ownerCategory: "pengaturan",
-    karyawanCategory: "operasional",
+    karyawanCategory: "pengaturan",
+  },
+  {
+    id: "laporan",
+    title: "Laporan",
+    desc: "Laporkan masalah ke owner",
+    roles: ["owner", "karyawan"],
+    ownerCategory: "pengaturan",
+    karyawanCategory: "pengaturan",
   },
 ];
 
@@ -142,7 +154,10 @@ export const OWNER_CATEGORY_LABEL: Record<OwnerMenuCategory, string> = {
 };
 
 export const KARYAWAN_CATEGORY_LABEL: Record<KaryawanMenuCategory, string> = {
-  operasional: "Operasional",
+  layanan: "Layanan",
+  keuangan: "Keuangan",
+  personalia: "Personalia",
+  pengaturan: "Pengaturan",
 };
 
 export const OWNER_CATEGORIES: OwnerMenuCategory[] = [
@@ -154,7 +169,12 @@ export const OWNER_CATEGORIES: OwnerMenuCategory[] = [
   "pengaturan",
 ];
 
-export const KARYAWAN_CATEGORIES: KaryawanMenuCategory[] = ["operasional"];
+export const KARYAWAN_CATEGORIES: KaryawanMenuCategory[] = [
+  "layanan",
+  "keuangan",
+  "personalia",
+  "pengaturan",
+];
 
 export function menusForRole(role: UserRole): MenuItem[] {
   return MENU_ITEMS.filter((m) => m.roles.includes(role));
@@ -169,7 +189,7 @@ export function menuCategoryForRole(
   role: UserRole
 ): MenuCategory {
   if (role === "owner") return item.ownerCategory;
-  return item.karyawanCategory ?? "operasional";
+  return item.karyawanCategory ?? "layanan";
 }
 
 export function categoriesForRole(role: UserRole): MenuCategory[] {
