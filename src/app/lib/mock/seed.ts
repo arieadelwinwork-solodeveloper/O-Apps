@@ -448,16 +448,20 @@ export function createSeedData() {
     {
       id: IDS.karyawan,
       full_name: "Siti Kasir",
+      email: "siti@demo.local",
       role: "karyawan",
       is_active: true,
       base_salary: 3_500_000,
+      created_at: iso(daysAgo(90)),
     },
     {
       id: IDS.karyawan2,
       full_name: "Andi Operator",
+      email: "andi@demo.local",
       role: "karyawan",
       is_active: true,
       base_salary: 3_200_000,
+      created_at: iso(daysAgo(60)),
     },
   ];
 
@@ -611,11 +615,42 @@ export function createSeedData() {
     name: "Laundry Demo",
     address: "Jl. Melati No. 12, Jakarta",
     phone: "021-1234567",
+    whatsapp: "081234567890",
+    openTime: "08:00",
+    closeTime: "20:00",
     attendance_lat: -6.2,
     attendance_lng: 106.816666,
     attendance_radius_m: 100,
     auto_send_complete_note: false,
+    workDaysTarget: 24,
+    cashDrawerVisibility: "all",
+    cashDrawerUserIds: [],
+    monthlyRevenueTarget: 15_000_000,
+    dailyOrderTarget: 10,
+    onboardingStep: 5,
+    onboardingCompleted: true,
   };
+
+  const subscription = {
+    id: "sub-demo-1",
+    plan: "pro" as const,
+    status: "active" as const,
+    trial_ends_at: null,
+    expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
+    created_at: iso(daysAgo(30)),
+  };
+
+  const subscriptionPayments = [
+    {
+      id: "sp-1",
+      amount: 299_000,
+      plan: "pro" as const,
+      period_start: iso(daysAgo(30)),
+      period_end: iso(daysAgo(-30)),
+      status: "paid" as const,
+      created_at: iso(daysAgo(30)),
+    },
+  ];
 
   return {
     services,
@@ -641,6 +676,8 @@ export function createSeedData() {
     reports,
     printDevices,
     business,
+    subscription,
+    subscriptionPayments,
     orderCounter: 4,
   };
 }

@@ -20,6 +20,10 @@ import { InventoryView } from "./views/InventoryView";
 import { CustomersView } from "./views/CustomersView";
 import { CustomerDetailView } from "./views/CustomerDetailView";
 import { ReportsView } from "./views/ReportsView";
+import { EmployeesView } from "./views/EmployeesView";
+import { SettingsView } from "./views/SettingsView";
+import { NotificationsView } from "./views/NotificationsView";
+import { SubscriptionView } from "./views/SubscriptionView";
 
 function OwnerOnly() {
   return <RoleRoute allow={["owner"]} />;
@@ -55,6 +59,10 @@ export const router = createBrowserRouter([
               { path: "layanan", Component: ServicesView },
               { path: "template", Component: TemplatesView },
               { path: "membership", Component: MembershipView },
+              { path: "karyawan", Component: EmployeesView },
+              { path: "pengaturan", Component: SettingsView },
+              { path: "notifikasi", Component: NotificationsView },
+              { path: "langganan", Component: SubscriptionView },
             ],
           },
         ],

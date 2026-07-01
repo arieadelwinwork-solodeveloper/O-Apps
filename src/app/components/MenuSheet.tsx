@@ -62,6 +62,26 @@ const MENU_VIEWS: Record<string, React.LazyExoticComponent<ComponentType>> = {
       default: m.ReportsView,
     }))
   ),
+  karyawan: lazy(() =>
+    import("../views/EmployeesView").then((m) => ({
+      default: m.EmployeesView,
+    }))
+  ),
+  pengaturan: lazy(() =>
+    import("../views/SettingsView").then((m) => ({
+      default: m.SettingsView,
+    }))
+  ),
+  notifikasi: lazy(() =>
+    import("../views/NotificationsView").then((m) => ({
+      default: m.NotificationsView,
+    }))
+  ),
+  langganan: lazy(() =>
+    import("../views/SubscriptionView").then((m) => ({
+      default: m.SubscriptionView,
+    }))
+  ),
 };
 
 function MenuLoading() {

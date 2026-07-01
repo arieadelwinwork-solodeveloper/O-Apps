@@ -169,6 +169,19 @@ ordersRouter.post(
     });
     const total = itemRows.reduce((sum, r) => sum + r.subtotal, 0);
 
+    let discountAmount = 0;
+    if (body.discountType && (body.discountValue ?? 0) > 0) {
+      const val = body.discountValue ?? 0;
+      if (body.discountType === "nominal") {
+        discountAmount = Math.min(val, total);
+      } else {
+        discountAmount = Math.round(
+          (total * Math.min(val, 100)) / 100
+        );
+      }
+    }
+    const afterDiscount = Math.max(0, total - discountAmount);
+
     const customerId = await findOrCreateCustomer(
       businessId,
       body.customerName,
@@ -180,7 +193,7 @@ ordersRouter.post(
       (body.membershipQuotaUsages?.length ?? 0) > 0;
 
     let membershipUsed = 0;
-    let netPayable = total;
+    let netPayable = afterDiscount;
     let membershipDeductions: Awaited<
       ReturnType<typeof computeMembershipDiscount>
     >["deductions"] = [];
@@ -189,7 +202,7 @@ ordersRouter.post(
       const result = await computeMembershipDiscount(
         businessId,
         customerId,
-        total,
+        afterDiscount,
         itemRows,
         {
           saldoAmount: body.membershipSaldoAmount,
@@ -268,6 +281,9 @@ ordersRouter.post(
         note: body.note?.trim() || null,
         work_status: "proses",
         membership_used: membershipUsed,
+        discount_type: body.discountType ?? null,
+        discount_value: body.discountValue ?? 0,
+        discount_amount: discountAmount,
         cash_shift_id: cashShiftId,
         estimated_done_at: body.estimatedDoneAt ?? null,
       })

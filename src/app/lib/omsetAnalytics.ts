@@ -120,20 +120,22 @@ export interface MonthlyProgressInfo {
 }
 
 /**
- * Progress bar omset bulan ini:
- * - Target = omset tertinggi (6 bln) × 120%
- * - Batas bawah = omset terendah (6 bln)
- * - Merah < bawah | Kuning ≥ bawah & ≤ tertinggi | Hijau > tertinggi
- * - Persentase boleh > 100% jika omset > target
+ * Progress bar omset bulan ini.
+ * Jika monthlyRevenueTarget > 0, pakai target owner.
+ * Jika tidak, fallback ke omset tertinggi × 120%.
  */
 export function deriveMonthlyProgress(
   revenueMonth: number,
-  chartMonthly: { revenue: number }[]
+  chartMonthly: { revenue: number }[],
+  monthlyRevenueTarget = 0
 ): MonthlyProgressInfo {
   const revenues = chartMonthly.map((d) => d.revenue);
   const highest = revenues.length > 0 ? Math.max(...revenues) : 0;
   const lowerBound = revenues.length > 0 ? Math.min(...revenues) : 0;
-  const target = Math.round(highest * 1.2);
+  const target =
+    monthlyRevenueTarget > 0
+      ? monthlyRevenueTarget
+      : Math.round(highest * 1.2);
 
   let progress = 0;
   if (target > 0) {
@@ -143,7 +145,11 @@ export function deriveMonthlyProgress(
   }
 
   let barColor: string;
-  if (revenueMonth < lowerBound) {
+  if (monthlyRevenueTarget > 0) {
+    if (progress >= 100) barColor = PROGRESS_BAR_COLORS.above;
+    else if (progress >= 70) barColor = PROGRESS_BAR_COLORS.mid;
+    else barColor = PROGRESS_BAR_COLORS.below;
+  } else if (revenueMonth < lowerBound) {
     barColor = PROGRESS_BAR_COLORS.below;
   } else if (revenueMonth > highest) {
     barColor = PROGRESS_BAR_COLORS.above;

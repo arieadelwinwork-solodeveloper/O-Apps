@@ -21,6 +21,8 @@ export interface CreateOrderInput {
   estimatedDoneAt?: string;
   membershipSaldoAmount?: number;
   membershipQuotaUsages?: { membershipId: string; qty: number }[];
+  discountType?: "nominal" | "percent" | null;
+  discountValue?: number;
 }
 
 export async function listOrders(status?: WorkStatus): Promise<Order[]> {

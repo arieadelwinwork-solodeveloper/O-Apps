@@ -38,6 +38,8 @@ export const createOrderSchema = z.object({
   // Fase I: potongan membership
   membershipSaldoAmount: z.number().int().nonnegative().optional(),
   membershipQuotaUsages: z.array(quotaUsageSchema).optional(),
+  discountType: z.enum(["nominal", "percent"]).nullable().optional(),
+  discountValue: z.number().int().nonnegative().optional(),
 });
 
 export const updateOrderStatusSchema = z.object({

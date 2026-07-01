@@ -15,6 +15,10 @@ import {
   Printer,
   LayoutGrid,
   MessageSquareWarning,
+  UserCog,
+  Settings,
+  Bell,
+  Crown,
 } from "lucide-react";
 
 export const MENU_ICON_MAP: Record<string, LucideIcon> = {
@@ -24,12 +28,16 @@ export const MENU_ICON_MAP: Record<string, LucideIcon> = {
   layanan: ListOrdered,
   konsumen: Users,
   absensi: Fingerprint,
+  karyawan: UserCog,
   penggajian: Banknote,
   inventori: Package,
   keuangan: TrendingUp,
   pengeluaran: Receipt,
   kas: Wallet,
   template: FileText,
+  pengaturan: Settings,
+  notifikasi: Bell,
+  langganan: Crown,
   printer: Printer,
   laporan: MessageSquareWarning,
 };

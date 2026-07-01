@@ -39,6 +39,8 @@ interface MockCreateOrderInput {
   estimatedDoneAt?: string;
   membershipSaldoAmount?: number;
   membershipQuotaUsages?: { membershipId: string; qty: number }[];
+  discountType?: "nominal" | "percent" | null;
+  discountValue?: number;
 }
 
 function delay(ms = 100): Promise<void> {
@@ -103,6 +105,17 @@ function createOrderFromInput(input: MockCreateOrderInput): Order {
   });
 
   const total = items.reduce((sum, i) => sum + i.subtotal, 0);
+
+  let discountAmount = 0;
+  if (input.discountType && (input.discountValue ?? 0) > 0) {
+    const val = input.discountValue ?? 0;
+    discountAmount =
+      input.discountType === "nominal"
+        ? Math.min(val, total)
+        : Math.round((total * Math.min(val, 100)) / 100);
+  }
+  const afterDiscount = Math.max(0, total - discountAmount);
+
   const membershipDiscount =
     (input.membershipSaldoAmount ?? 0) +
     (input.membershipQuotaUsages?.reduce((acc, u) => {
@@ -112,7 +125,7 @@ function createOrderFromInput(input: MockCreateOrderInput): Order {
       return acc + (svc?.price ?? 0) * u.qty;
     }, 0) ?? 0);
 
-  const netTotal = Math.max(0, total - membershipDiscount);
+  const netTotal = Math.max(0, afterDiscount - membershipDiscount);
   let paidAmount = 0;
   let remaining = netTotal;
   if (input.paymentStatus === "lunas_depan") {
@@ -173,7 +186,7 @@ function createOrderFromInput(input: MockCreateOrderInput): Order {
     order_no: orderNo(),
     customer_id: customer.id,
     cashier_id: IDS.karyawan,
-    total: netTotal,
+    total,
     payment_status: input.paymentStatus,
     paid_amount: paidAmount,
     remaining_amount: remaining,
@@ -182,6 +195,9 @@ function createOrderFromInput(input: MockCreateOrderInput): Order {
     note: input.note?.trim() || null,
     work_status: "proses",
     membership_used: membershipDiscount,
+    discount_type: input.discountType ?? null,
+    discount_value: input.discountValue ?? 0,
+    discount_amount: discountAmount,
     estimated_done_at: input.estimatedDoneAt ?? null,
     created_at: new Date().toISOString(),
     customers: { name: input.customerName, phone: input.customerPhone },
@@ -730,6 +746,7 @@ export async function mockApiFetch<T>(
       daysInMonth: new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(),
       todayLabel: d.toLocaleDateString("id-ID", { day: "numeric", month: "long" }),
       monthLabel: d.toLocaleDateString("id-ID", { month: "long", year: "numeric" }),
+      monthlyRevenueTarget: s.business.monthlyRevenueTarget ?? 15_000_000,
       chartDaily: buildChartDaily(),
       chartWeekly: buildChartDaily(),
       chartMonthly,
@@ -957,6 +974,56 @@ export async function mockApiFetch<T>(
   if (pathname === "/api/users" && method === "GET") {
     return { users: s.users } as T;
   }
+  if (pathname === "/api/users" && method === "POST") {
+    const input = body<{
+      email: string;
+      password: string;
+      fullName: string;
+      baseSalary?: number;
+    }>(options);
+    const user = {
+      id: uid("user"),
+      full_name: input.fullName,
+      email: input.email,
+      role: "karyawan",
+      is_active: true,
+      base_salary: input.baseSalary ?? 0,
+      created_at: new Date().toISOString(),
+    };
+    s.users.push(user);
+    return { success: true, userId: user.id } as T;
+  }
+  if (pathname.match(/^\/api\/users\/[^/]+$/) && method === "PATCH") {
+    const id = pathname.split("/").pop()!;
+    const input = body<{
+      fullName?: string;
+      baseSalary?: number;
+      isActive?: boolean;
+    }>(options);
+    const u = s.users.find((x) => x.id === id);
+    if (u) {
+      if (input.fullName !== undefined) u.full_name = input.fullName;
+      if (input.baseSalary !== undefined) u.base_salary = input.baseSalary;
+      if (input.isActive !== undefined) u.is_active = input.isActive;
+    }
+    return { success: true } as T;
+  }
+  if (pathname.match(/^\/api\/users\/[^/]+\/status$/) && method === "PATCH") {
+    const parts = pathname.split("/");
+    const id = parts[parts.length - 2];
+    const input = body<{ isActive: boolean }>(options);
+    const u = s.users.find((x) => x.id === id);
+    if (u) u.is_active = input.isActive;
+    return { success: true } as T;
+  }
+
+  // --- Subscriptions ---
+  if (pathname === "/api/subscriptions" && method === "GET") {
+    return {
+      subscription: s.subscription,
+      payments: s.subscriptionPayments,
+    } as T;
+  }
 
   // --- Cash ---
   if (pathname === "/api/cash-shifts/current" && method === "GET") {
@@ -1050,11 +1117,24 @@ export async function mockApiFetch<T>(
     return { business: s.business } as T;
   }
   if (pathname === "/api/business" && method === "PATCH") {
-    const input = body<{ autoSendCompleteNote?: boolean }>(options);
-    if (input.autoSendCompleteNote !== undefined) {
-      s.business.auto_send_complete_note = input.autoSendCompleteNote;
+    const input = body<Record<string, unknown>>(options);
+    const map: Record<string, string> = {
+      autoSendCompleteNote: "auto_send_complete_note",
+      openTime: "openTime",
+      closeTime: "closeTime",
+      workDaysTarget: "workDaysTarget",
+      cashDrawerVisibility: "cashDrawerVisibility",
+      cashDrawerUserIds: "cashDrawerUserIds",
+      monthlyRevenueTarget: "monthlyRevenueTarget",
+      dailyOrderTarget: "dailyOrderTarget",
+      onboardingStep: "onboardingStep",
+      onboardingCompleted: "onboardingCompleted",
+      attendanceRadiusM: "attendance_radius_m",
+    };
+    for (const [k, v] of Object.entries(input)) {
+      const key = map[k] ?? k;
+      (s.business as Record<string, unknown>)[key] = v;
     }
-    Object.assign(s.business, input);
     return { business: s.business } as T;
   }
 

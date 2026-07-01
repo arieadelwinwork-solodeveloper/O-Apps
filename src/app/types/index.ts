@@ -76,6 +76,9 @@ export interface Order {
   note: string | null;
   work_status: WorkStatus;
   membership_used?: number;
+  discount_type?: "nominal" | "percent" | null;
+  discount_value?: number;
+  discount_amount?: number;
   estimated_done_at: string | null;
   picked_up_at?: string | null;
   picked_up_by?: string | null;
@@ -159,11 +162,20 @@ export interface Business {
   name: string;
   address: string | null;
   phone: string | null;
+  whatsapp?: string | null;
+  openTime?: string | null;
+  closeTime?: string | null;
   attendance_lat?: number | null;
   attendance_lng?: number | null;
   attendance_radius_m?: number | null;
-  /** Kirim WhatsApp nota selesai otomatis setelah semua tahap selesai */
   auto_send_complete_note?: boolean;
+  workDaysTarget?: number;
+  cashDrawerVisibility?: "all" | "selected";
+  cashDrawerUserIds?: string[];
+  monthlyRevenueTarget?: number;
+  dailyOrderTarget?: number;
+  onboardingStep?: number;
+  onboardingCompleted?: boolean;
 }
 
 export interface PrintDevice {
@@ -398,9 +410,42 @@ export interface OwnerOmsetSummary {
   daysInMonth: number;
   todayLabel: string;
   monthLabel: string;
+  monthlyRevenueTarget: number;
   chartDaily: OmsetChartPoint[];
   chartWeekly: OmsetChartPoint[];
   chartMonthly: OmsetChartPoint[];
+}
+
+export type SubscriptionPlan = "starter" | "pro" | "business";
+export type SubscriptionStatus = "trial" | "active" | "expired" | "cancelled";
+
+export interface Subscription {
+  id: string;
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  trial_ends_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface SubscriptionPayment {
+  id: string;
+  amount: number;
+  plan: SubscriptionPlan;
+  period_start: string;
+  period_end: string;
+  status: "pending" | "paid" | "failed";
+  created_at: string;
+}
+
+export interface EmployeeListItem {
+  id: string;
+  name: string;
+  email: string | null;
+  role: UserRole;
+  isActive: boolean;
+  baseSalary: number;
+  joinedAt: string;
 }
 
 export interface FinanceForecast {

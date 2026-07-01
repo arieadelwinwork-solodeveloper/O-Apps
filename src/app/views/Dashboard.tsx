@@ -16,6 +16,7 @@ import {
   SWIPE_OPEN_PX,
 } from "../components/FullMenuPanel";
 import { findMenu } from "../config/menuItems";
+import { OnboardingWizard } from "../components/OnboardingWizard";
 
 const EDGE_SWIPE_PX = 28;
 
@@ -183,6 +184,13 @@ export function Dashboard() {
               <LogOut className="w-5 h-5" />
             </button>
           </div>
+
+          {role === "owner" && (
+            <OnboardingWizard
+              onComplete={() => {}}
+              onOpenCashier={() => setMenu("pemesanan")}
+            />
+          )}
 
           {role === "karyawan" && <EmployeeSummary />}
           {role === "owner" && <OwnerSummary />}

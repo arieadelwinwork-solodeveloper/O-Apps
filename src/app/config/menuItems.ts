@@ -2,6 +2,7 @@ import type { UserRole } from "../types";
 
 /** Kategori menu dashboard owner */
 export type OwnerMenuCategory =
+  | "utama"
   | "pelayanan"
   | "crm"
   | "manajemen_sdm"
@@ -11,6 +12,7 @@ export type OwnerMenuCategory =
 
 /** Kategori menu dashboard karyawan */
 export type KaryawanMenuCategory =
+  | "utama"
   | "layanan"
   | "keuangan"
   | "personalia"
@@ -28,6 +30,22 @@ export interface MenuItem {
 }
 
 export const MENU_ITEMS: MenuItem[] = [
+  // —— Utama (paling atas) ——
+  {
+    id: "langganan",
+    title: "Langganan",
+    desc: "Paket & pembayaran SaaS",
+    roles: ["owner"],
+    ownerCategory: "utama",
+  },
+  {
+    id: "laporan",
+    title: "Laporan",
+    desc: "Laporkan masalah ke owner",
+    roles: ["owner", "karyawan"],
+    ownerCategory: "utama",
+    karyawanCategory: "utama",
+  },
   // —— Pelayanan (owner) ——
   {
     id: "pemesanan",
@@ -78,10 +96,17 @@ export const MENU_ITEMS: MenuItem[] = [
     karyawanCategory: "personalia",
   },
   {
+    id: "karyawan",
+    title: "Karyawan",
+    desc: "Kelola tim & akun",
+    roles: ["owner"],
+    ownerCategory: "manajemen_sdm",
+  },
+  {
     id: "penggajian",
     title: "Gaji",
     desc: "Slip & pinjaman",
-    roles: ["karyawan"],
+    roles: ["owner", "karyawan"],
     ownerCategory: "manajemen_sdm",
     karyawanCategory: "personalia",
   },
@@ -127,6 +152,20 @@ export const MENU_ITEMS: MenuItem[] = [
     ownerCategory: "pengaturan",
   },
   {
+    id: "pengaturan",
+    title: "Pengaturan",
+    desc: "Profil toko & operasional",
+    roles: ["owner"],
+    ownerCategory: "pengaturan",
+  },
+  {
+    id: "notifikasi",
+    title: "Notifikasi",
+    desc: "Semua pemberitahuan",
+    roles: ["owner"],
+    ownerCategory: "pengaturan",
+  },
+  {
     id: "printer",
     title: "Printer",
     desc: "Pasangkan printer nota",
@@ -134,17 +173,10 @@ export const MENU_ITEMS: MenuItem[] = [
     ownerCategory: "pengaturan",
     karyawanCategory: "pengaturan",
   },
-  {
-    id: "laporan",
-    title: "Laporan",
-    desc: "Laporkan masalah ke owner",
-    roles: ["owner", "karyawan"],
-    ownerCategory: "pengaturan",
-    karyawanCategory: "pengaturan",
-  },
 ];
 
 export const OWNER_CATEGORY_LABEL: Record<OwnerMenuCategory, string> = {
+  utama: "Utama",
   pelayanan: "Pelayanan",
   crm: "CRM",
   manajemen_sdm: "Manajemen SDM",
@@ -154,6 +186,7 @@ export const OWNER_CATEGORY_LABEL: Record<OwnerMenuCategory, string> = {
 };
 
 export const KARYAWAN_CATEGORY_LABEL: Record<KaryawanMenuCategory, string> = {
+  utama: "Utama",
   layanan: "Layanan",
   keuangan: "Keuangan",
   personalia: "Personalia",
@@ -161,6 +194,7 @@ export const KARYAWAN_CATEGORY_LABEL: Record<KaryawanMenuCategory, string> = {
 };
 
 export const OWNER_CATEGORIES: OwnerMenuCategory[] = [
+  "utama",
   "pelayanan",
   "crm",
   "manajemen_sdm",
@@ -170,6 +204,7 @@ export const OWNER_CATEGORIES: OwnerMenuCategory[] = [
 ];
 
 export const KARYAWAN_CATEGORIES: KaryawanMenuCategory[] = [
+  "utama",
   "layanan",
   "keuangan",
   "personalia",

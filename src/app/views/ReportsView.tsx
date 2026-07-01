@@ -141,13 +141,6 @@ export function ReportsView() {
         </div>
       )}
 
-      {isOwner && (
-        <p className="text-xs text-slate-500 px-1">
-          Laporan dari karyawan. Anda juga mendapat notifikasi saat ada laporan
-          baru.
-        </p>
-      )}
-
       <div className="space-y-2">
         <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
           {isOwner ? "Semua Laporan" : "Riwayat Laporan Saya"}

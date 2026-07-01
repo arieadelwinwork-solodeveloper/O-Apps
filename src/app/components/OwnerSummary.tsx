@@ -152,7 +152,11 @@ export function OwnerSummary() {
   const monthlyProgress = useMemo(
     () =>
       data
-        ? deriveMonthlyProgress(data.revenueMonth, data.chartMonthly)
+        ? deriveMonthlyProgress(
+            data.revenueMonth,
+            data.chartMonthly,
+            data.monthlyRevenueTarget
+          )
         : null,
     [data]
   );

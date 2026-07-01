@@ -302,6 +302,12 @@ dashboardRouter.get(
         year: "numeric",
       });
 
+      const { data: bizRow } = await supabaseAdmin
+        .from("businesses")
+        .select("monthly_revenue_target")
+        .eq("id", businessId)
+        .maybeSingle();
+
       res.json({
         revenueMonth: monthOrders.revenue,
         revenueToday: todayOrders.revenue,
@@ -311,6 +317,7 @@ dashboardRouter.get(
         daysInMonth,
         todayLabel,
         monthLabel,
+        monthlyRevenueTarget: bizRow?.monthly_revenue_target ?? 0,
         chartDaily,
         chartWeekly,
         chartMonthly,

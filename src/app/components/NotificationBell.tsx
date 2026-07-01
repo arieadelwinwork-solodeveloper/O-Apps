@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { Bell, Loader2, X } from "lucide-react";
 import {
   listNotifications,
@@ -16,6 +17,7 @@ import {
 import type { AppNotification, OperationalReport } from "../types";
 
 export function NotificationBell() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
@@ -153,6 +155,16 @@ export function NotificationBell() {
                   ))}
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/?m=notifikasi");
+                }}
+                className="w-full mt-2 py-2 text-xs font-medium text-[#001F5B] border border-[#001F5B]/20 rounded-xl"
+              >
+                Lihat semua notifikasi →
+              </button>
             </div>
           </>
         )}

@@ -114,6 +114,9 @@ export function OrderView() {
   const [customerDirectory, setCustomerDirectory] = useState<Customer[]>([]);
   const [membershipRegisterMode, setMembershipRegisterMode] = useState(false);
   const [scrollCashierToTop, setScrollCashierToTop] = useState(false);
+  const [discountMode, setDiscountMode] = useState<"none" | "nominal" | "percent">("none");
+  const [discountInput, setDiscountInput] = useState("");
+  const [showDiscountPanel, setShowDiscountPanel] = useState(false);
   const cashierTopRef = useRef<HTMLDivElement>(null);
 
   function openMembershipRegister() {
@@ -214,6 +217,19 @@ export function OrderView() {
     [cart]
   );
 
+  const manualDiscountAmount = useMemo(() => {
+    if (discountMode === "none" || !discountInput) return 0;
+    const val = Number(discountInput) || 0;
+    if (val <= 0) return 0;
+    if (discountMode === "nominal") return Math.min(val, total);
+    return Math.round((total * Math.min(val, 100)) / 100);
+  }, [discountMode, discountInput, total]);
+
+  const discountPercentCapped =
+    discountMode === "percent" && Number(discountInput) > 100;
+
+  const afterManualDiscount = Math.max(0, total - manualDiscountAmount);
+
   const quotaDiscount = useMemo(() => {
     let d = 0;
     for (const m of quotaMemberships) {
@@ -231,7 +247,7 @@ export function OrderView() {
     return d;
   }, [quotaMemberships, cart, quotaToUse, services]);
 
-  const netBeforeSaldo = total - quotaDiscount;
+  const netBeforeSaldo = afterManualDiscount - quotaDiscount;
   const saldoMembershipAmount = Math.min(
     Number(saldoToUse) || 0,
     saldoMembership?.balance ?? 0,
@@ -410,6 +426,12 @@ export function OrderView() {
           ? { membershipSaldoAmount: saldoMembershipAmount }
           : {}),
         ...(quotaUsages.length > 0 ? { membershipQuotaUsages: quotaUsages } : {}),
+        ...(discountMode !== "none" && manualDiscountAmount > 0
+          ? {
+              discountType: discountMode,
+              discountValue: Number(discountInput) || 0,
+            }
+          : {}),
       };
       const order = await createOrder(payload);
       setMembershipReceipt(receiptSnap);
@@ -437,6 +459,8 @@ export function OrderView() {
     setShowMembershipPrompt(false);
     setMembershipReceipt(null);
     setMembershipRegisterMode(false);
+    setDiscountMode("none");
+    setDiscountInput("");
     setSuccessOrder(null);
     setSuccessError(null);
   }
@@ -744,6 +768,86 @@ export function OrderView() {
         </div>
       )}
 
+      {/* Diskon manual */}
+      {!membershipRegisterMode && itemCount > 0 && (
+        <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03] mb-4">
+          {!showDiscountPanel ? (
+            <button
+              type="button"
+              onClick={() => setShowDiscountPanel(true)}
+              className="w-full text-sm font-medium text-[#001F5B] py-1"
+            >
+              + Tambah Diskon
+            </button>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-slate-800">Diskon</h2>
+                {discountMode === "none" && !discountInput && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDiscountPanel(false)}
+                    className="text-xs text-slate-500"
+                  >
+                    Tutup
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {(
+                  [
+                    { id: "none", label: "Tanpa" },
+                    { id: "nominal", label: "Rp" },
+                    { id: "percent", label: "%" },
+                  ] as const
+                ).map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => {
+                      setDiscountMode(d.id);
+                      if (d.id === "none") setDiscountInput("");
+                    }}
+                    className={`rounded-xl py-2 text-xs font-medium ${
+                      discountMode === d.id
+                        ? "bg-[#001F5B] text-white"
+                        : "bg-[#F5F5F7] text-slate-600"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+              {discountMode !== "none" && (
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={0}
+                  max={discountMode === "percent" ? 100 : undefined}
+                  placeholder={
+                    discountMode === "nominal"
+                      ? "Nominal diskon (Rp)"
+                      : "Persen (0–100)"
+                  }
+                  value={discountInput}
+                  onChange={(e) => setDiscountInput(e.target.value)}
+                />
+              )}
+              {discountPercentCapped && (
+                <p className="text-xs text-amber-600 mt-2">
+                  Maksimum diskon 100%. Dihitung sebagai 100%.
+                </p>
+              )}
+              {manualDiscountAmount > 0 && (
+                <p className="text-xs text-emerald-600 mt-2 font-medium">
+                  Potongan diskon: − {rupiah(manualDiscountAmount)}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Keterangan */}
       {!membershipRegisterMode && (
       <div className="bg-white rounded-[20px] p-5 shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-black/[0.03] mb-4">
@@ -843,7 +947,7 @@ export function OrderView() {
             )}
           </span>
           <div className="text-right">
-            {membershipDiscount > 0 && (
+            {(membershipDiscount > 0 || manualDiscountAmount > 0) && (
               <div className="text-xs text-slate-400 line-through">
                 {rupiah(total)}
               </div>
